@@ -1,0 +1,65 @@
+name: US State Statute Collect
+
+on:
+  workflow_dispatch:
+    inputs:
+      states:
+        description: 'JSON 배열 (예: ["wi","ny","nj","oh","mo","ri"])'
+        required: true
+        default: '["wi","ny","nj","oh","mo","ri"]'
+      smoke:
+        description: '0=전수, N>0=N건 후 중단'
+        required: false
+        default: '0'
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        state: ${{ fromJSON(inputs.states) }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Run enum
+        run: |
+          export RAW_DIR="${GITHUB_WORKSPACE}/out/us-${{ matrix.state }}/statute"
+          export SMOKE="${{ inputs.smoke }}"
+          mkdir -p "${RAW_DIR}"
+          python adapters/dev_us_${{ matrix.state }}_statute_collect.py --enum || true
+        env:
+          NY_OPENLEG_KEY: ${{ secrets.NY_OPENLEG_KEY }}
+
+      - name: Run collect
+        run: |
+          export RAW_DIR="${GITHUB_WORKSPACE}/out/us-${{ matrix.state }}/statute"
+          export SMOKE="${{ inputs.smoke }}"
+          python adapters/dev_us_${{ matrix.state }}_statute_collect.py --collect
+        env:
+          NY_OPENLEG_KEY: ${{ secrets.NY_OPENLEG_KEY }}
+
+      - name: Run verify
+        run: |
+          export RAW_DIR="${GITHUB_WORKSPACE}/out/us-${{ matrix.state }}/statute"
+          python adapters/dev_us_${{ matrix.state }}_statute_collect.py --verify || true
+        env:
+          NY_OPENLEG_KEY: ${{ secrets.NY_OPENLEG_KEY }}
+
+      - name: Create tarball
+        run: |
+          tar czf ${{ matrix.state }}.tar.gz -C "${GITHUB_WORKSPACE}/out" us-${{ matrix.state }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: statute-${{ matrix.state }}
+          path: ${{ matrix.state }}.tar.gz
+          retention-days: 7
