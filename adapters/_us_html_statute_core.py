@@ -29,6 +29,7 @@ import time
 import ssl
 import urllib.request
 import urllib.error
+import urllib.parse
 
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0 Safari/537.36"
 DELAY = float(os.environ.get("HTML_DELAY", "0.4"))
@@ -81,20 +82,19 @@ def fetch_to_file_retry(url, path, backoff=2.0, max_retry=5):
     return False
 
 
-def _abs(base, index_url, href):
-    href = href.strip()
-    if href.startswith("http"):
-        return href
-    if href.startswith("/"):
-        return base + href
-    return index_url.rstrip("/") + "/" + href
+def _abs(base, doc_url, href):
+    # 표준 URL 해석 = 상대경로는 문서 URL(doc_url) 디렉터리 기준으로 결합.
+    # 옛 구현은 파일 URL 뒤에 그대로 붙여 .../titles.htm/title_01.htm 같은 404를 만들었음(CT 버그).
+    href = href.strip().replace("&amp;", "&")
+    return urllib.parse.urljoin(doc_url, href)
 
 
-def _links(base, index_url, html_bytes, pattern):
+def _links(base, doc_url, html_bytes, pattern):
+    # doc_url = 링크가 등장한 실제 문서 URL(인덱스 또는 챕터 페이지). 상대경로 기준점.
     text = html_bytes.decode("utf-8", "ignore")
     out, seen = [], set()
     for href in pattern.findall(text):
-        u = _abs(base, index_url, href)
+        u = _abs(base, doc_url, href)
         if u not in seen:
             seen.add(u)
             out.append(u)
@@ -171,9 +171,19 @@ def diag(cfg):
     print(f"[DIAG index] {index_url} status={code} body_len={len(body)}")
     cur_link = cfg.get("link_re", DEFAULT_LINK_RE)
     print(f"[DIAG] 현재 link_re 매칭={len(_links(base, index_url, body, cur_link))}")
-    if cfg.get("chapter_re"):
-        print(f"[DIAG] 현재 chapter_re 매칭={len(_links(base, index_url, body, cfg['chapter_re']))}")
     _dump_hrefs(body, n=80)
+    # 2단 트리 = chapter_re 가 있으면 첫 챕터 페이지까지 받아 섹션 구조도 관찰.
+    if cfg.get("chapter_re"):
+        chs = _links(base, index_url, body, cfg["chapter_re"])
+        print(f"[DIAG] 현재 chapter_re 매칭={len(chs)} 샘플={chs[:3]}")
+        if chs:
+            try:
+                c2, b2 = http_get(chs[0])
+                print(f"[DIAG chapter] {chs[0]} status={c2} body_len={len(b2)}")
+                print(f"[DIAG chapter] 현재 link_re 매칭={len(_links(base, chs[0], b2, cur_link))}")
+                _dump_hrefs(b2, n=80)
+            except Exception as e:
+                print(f"[DIAG chapter ERR] {type(e).__name__}: {e}")
     sys.exit(0)
 
 
@@ -194,7 +204,7 @@ def _enum_urls(cfg):
             try:
                 c2, b2 = http_get(ch)
                 if c2 == 200:
-                    for s in _links(base, index_url, b2, cfg.get("link_re", DEFAULT_LINK_RE)):
+                    for s in _links(base, ch, b2, cfg.get("link_re", DEFAULT_LINK_RE)):
                         if s not in seen:
                             seen.add(s)
                             out.append(s)
