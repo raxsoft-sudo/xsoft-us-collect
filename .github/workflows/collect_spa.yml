@@ -1,0 +1,87 @@
+name: US State Statute Collect (SPA / Playwright)
+
+# 진짜 SPA(JS 렌더) 주 전용 — headless chromium 으로 렌더 후 수집.
+# 정적 트랙(collect.yml)과 분리 = Playwright 설치 비용을 SPA 주에만 부담.
+# ★ diag 우선 = 추정 셀렉터 금지(계명1). diag 로 렌더 DOM href 실측 후 link_re 보정.
+
+on:
+  workflow_dispatch:
+    inputs:
+      states:
+        description: 'JSON 배열 (SPA 주 예: ["in","sd","al"])'
+        required: true
+        default: '["in"]'
+      smoke:
+        description: '0=전수, N>0=N건 후 중단'
+        required: false
+        default: '0'
+      mode:
+        description: 'diag=렌더 DOM href 덤프 / collect=전수집'
+        required: false
+        default: 'diag'
+
+jobs:
+  collect-spa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    strategy:
+      fail-fast: false
+      matrix:
+        state: ${{ fromJSON(inputs.states) }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Playwright (chromium)
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install playwright
+          python -m playwright install --with-deps chromium
+
+      - name: Run diag
+        if: inputs.mode == 'diag'
+        run: |
+          export RAW_DIR="${GITHUB_WORKSPACE}/out/us-${{ matrix.state }}/statute"
+          python adapters/dev_us_${{ matrix.state }}_statute_collect.py --diag
+
+      - name: Run enum
+        if: inputs.mode != 'diag'
+        run: |
+          export RAW_DIR="${GITHUB_WORKSPACE}/out/us-${{ matrix.state }}/statute"
+          export SMOKE="${{ inputs.smoke }}"
+          mkdir -p "${RAW_DIR}"
+          python adapters/dev_us_${{ matrix.state }}_statute_collect.py --enum || true
+
+      - name: Run collect
+        if: inputs.mode != 'diag'
+        timeout-minutes: 330
+        run: |
+          export RAW_DIR="${GITHUB_WORKSPACE}/out/us-${{ matrix.state }}/statute"
+          export SMOKE="${{ inputs.smoke }}"
+          python adapters/dev_us_${{ matrix.state }}_statute_collect.py --collect
+
+      - name: Run verify
+        if: always() && inputs.mode != 'diag'
+        run: |
+          export RAW_DIR="${GITHUB_WORKSPACE}/out/us-${{ matrix.state }}/statute"
+          python adapters/dev_us_${{ matrix.state }}_statute_collect.py --verify || true
+
+      - name: Create tarball
+        if: always() && inputs.mode != 'diag'
+        run: |
+          tar czf ${{ matrix.state }}.tar.gz -C "${GITHUB_WORKSPACE}/out" us-${{ matrix.state }} || true
+
+      - name: Upload artifact
+        if: always() && inputs.mode != 'diag'
+        uses: actions/upload-artifact@v4
+        with:
+          name: statute-spa-${{ matrix.state }}
+          path: ${{ matrix.state }}.tar.gz
+          retention-days: 7
+          if-no-files-found: warn
