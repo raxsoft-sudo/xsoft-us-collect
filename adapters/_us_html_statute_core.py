@@ -126,11 +126,35 @@ def probe(cfg):
     print("주의: 지오블록 가능. 셀렉터는 GHA probe 로그로 보정 필요 [추정]")
 
 
-def _fatal_zero(kind, index_url):
+_HREF_RE = re.compile(r'href=["\']([^"\']+)["\']', re.IGNORECASE)
+
+
+def _dump_hrefs(body, n=40):
+    # 0파싱 시 실제 href 구조를 GHA 미국 IP 로그에 노출 = 셀렉터 보정 근거(조작 아님·관찰).
+    if not body:
+        print("[DIAG hrefs] 본문 없음(챕터 순회 단계)")
+        return
+    text = body.decode("utf-8", "ignore")
+    all_h = _HREF_RE.findall(text)
+    digit_h = [h for h in all_h if any(c.isdigit() for c in h)]
+    seen, sample = set(), []
+    for h in digit_h:
+        if h not in seen:
+            seen.add(h)
+            sample.append(h)
+        if len(sample) >= n:
+            break
+    print(f"[DIAG hrefs] 전체href={len(all_h)} 숫자포함distinct={len(set(digit_h))} 샘플{len(sample)}:")
+    for h in sample:
+        print(f"  HREF {h[:160]}")
+
+
+def _fatal_zero(kind, index_url, body=b""):
     # 0순위 계명1 = 무작정 조작 폴백 금지. 0파싱 = 구조 미확인 → hard-fail.
     # GHA(미국 IP) enum 로그의 실제 응답으로 셀렉터(link_re·chapter_re) 보정 후 재발진.
     print(f"[FATAL] 인덱스 {kind} 파싱 0건 — 구조 미확인. 조작 폴백 제거됨(계명1).")
     print(f"[FATAL] INDEX_URL={index_url} 응답을 GHA 로그로 확인하고 셀렉터 보정 필요.")
+    _dump_hrefs(body)
     sys.exit(1)
 
 
@@ -145,7 +169,7 @@ def _enum_urls(cfg):
     if cfg.get("chapter_re"):
         chapters = _links(base, index_url, body, cfg["chapter_re"])
         if not chapters:
-            _fatal_zero("챕터", index_url)
+            _fatal_zero("챕터", index_url, body)
         out, seen = [], set()
         for ci, ch in enumerate(chapters, 1):
             try:
@@ -168,7 +192,7 @@ def _enum_urls(cfg):
     # 1단계 직접: 인덱스에서 바로 섹션 링크
     secs = _links(base, index_url, body, cfg.get("link_re", DEFAULT_LINK_RE))
     if not secs:
-        _fatal_zero("섹션", index_url)
+        _fatal_zero("섹션", index_url, body)
     return secs[:SMOKE] if SMOKE else secs
 
 
