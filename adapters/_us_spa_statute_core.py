@@ -30,8 +30,10 @@ CONFIG 키:
 """
 import os
 import re
+import ssl
 import sys
 import time
+import urllib.request
 from urllib.parse import urljoin
 
 EXT_DEFAULT = ".html"
@@ -131,16 +133,54 @@ def _fname(url, ext):
     return safe[-180:] + ext
 
 
+_CTX = ssl.create_default_context()
+_CTX.check_hostname = False
+_CTX.verify_mode = ssl.CERT_NONE
+
+
+def _collect_http(cfg, raw, urls, ext, delay, smoke):
+    # JSON/정적 API 응답을 Playwright 없이 직접 GET(렌더 불요). enum URL 은 netcap 발굴 정본.
+    ok = miss = skip = 0
+    for i, url in enumerate(urls, 1):
+        path = os.path.join(raw, _fname(url, ext))
+        if os.path.exists(path) and os.path.getsize(path) > 0:
+            skip += 1
+            continue
+        try:
+            req = urllib.request.Request(
+                url, headers={"User-Agent": SPA_UA, "Accept": "application/json,*/*"}
+            )
+            with urllib.request.urlopen(req, timeout=120, context=_CTX) as r:
+                data = r.read()
+            tmp = path + ".part"
+            with open(tmp, "wb") as f:
+                f.write(data)
+            os.replace(tmp, path)
+            ok += 1
+        except Exception as e:
+            print(f"  [miss] {url} ({type(e).__name__})")
+            miss += 1
+        if i % 25 == 0:
+            print(f"  진행 {i}/{len(urls)} ok={ok} skip={skip} miss={miss}", flush=True)
+        if smoke and ok >= smoke:
+            print(f"  [SMOKE] {smoke}건 후 중단")
+            break
+        time.sleep(delay)
+    print(f"[collect {cfg['state']}] 총={len(urls)} ok={ok} skip={skip} miss={miss}")
+
+
 def collect(cfg):
     raw, enum_file = _paths(cfg)
     if not os.path.exists(enum_file):
-        print(f"열거 정본 없음: {enum_file} (먼저 --enum)")
+        print(f"열거 정본 없음: {enum_file} (먼저 --enum/--netcap)")
         sys.exit(1)
     with open(enum_file) as f:
         urls = [ln.strip() for ln in f if ln.strip()]
     ext = cfg.get("ext", EXT_DEFAULT)
     delay = float(os.environ.get("SPA_DELAY", "0.5"))
     smoke = int(os.environ.get("SMOKE", "0"))
+    if cfg.get("http_json"):
+        return _collect_http(cfg, raw, urls, ext, delay, smoke)
     ok = miss = skip = 0
     for i, url in enumerate(urls, 1):
         path = os.path.join(raw, _fname(url, ext))
@@ -249,6 +289,19 @@ def netcap(cfg):
         print(f"  [{status} {rt} {ct}] {url[:220]}")
     if not rows:
         print("[NETCAP] 초기 로드 XHR/fetch 0건 = 클릭/상호작용 유발 필요(추정 클릭 금지·재보고)")
+    # api_re = netcap 으로 잡힌 실제 응답 URL 중 statute API 패턴(관찰·추정 아님)을 enum 정본 저장.
+    api_re = cfg.get("api_re")
+    if api_re:
+        raw, enum_file = _paths(cfg)
+        os.makedirs(raw, exist_ok=True)
+        api_urls = [u for (_, _, _, u) in rows if api_re.search(u)]
+        if api_urls:
+            with open(enum_file, "w") as f:
+                for u in api_urls:
+                    f.write(u + "\n")
+            print(f"[NETCAP enum] api_re 매칭 {len(api_urls)}건 → {enum_file} 저장")
+        else:
+            print("[NETCAP enum] api_re 매칭 0건 = enum 미저장(셀렉터 재측정·추정 금지)")
     sys.exit(0)
 
 

@@ -16,7 +16,7 @@ on:
         required: false
         default: '0'
       mode:
-        description: 'diag=렌더 href 덤프 / netcap=XHR응답URL 캡처 / collect=전수집'
+        description: 'diag=렌더href / netcap=XHR응답URL캡처 / collect=전수집 / apicollect=netcap발굴enum→JSON직수집'
         required: false
         default: 'diag'
 
@@ -51,13 +51,14 @@ jobs:
           python adapters/dev_us_${{ matrix.state }}_statute_collect.py --diag
 
       - name: Run netcap
-        if: inputs.mode == 'netcap'
+        if: inputs.mode == 'netcap' || inputs.mode == 'apicollect'
         run: |
           export RAW_DIR="${GITHUB_WORKSPACE}/out/us-${{ matrix.state }}/statute"
+          mkdir -p "${RAW_DIR}"
           python adapters/dev_us_${{ matrix.state }}_statute_collect.py --netcap
 
       - name: Run enum
-        if: inputs.mode != 'diag' && inputs.mode != 'netcap'
+        if: inputs.mode != 'diag' && inputs.mode != 'netcap' && inputs.mode != 'apicollect'
         run: |
           export RAW_DIR="${GITHUB_WORKSPACE}/out/us-${{ matrix.state }}/statute"
           export SMOKE="${{ inputs.smoke }}"
