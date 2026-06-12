@@ -15,6 +15,7 @@ on:
 jobs:
   collect:
     runs-on: ubuntu-latest
+    timeout-minutes: 355
     strategy:
       fail-fast: false
       matrix:
@@ -39,6 +40,7 @@ jobs:
           NY_OPENLEG_KEY: ${{ secrets.NY_OPENLEG_KEY }}
 
       - name: Run collect
+        timeout-minutes: 330
         run: |
           export RAW_DIR="${GITHUB_WORKSPACE}/out/us-${{ matrix.state }}/statute"
           export SMOKE="${{ inputs.smoke }}"
@@ -47,6 +49,7 @@ jobs:
           NY_OPENLEG_KEY: ${{ secrets.NY_OPENLEG_KEY }}
 
       - name: Run verify
+        if: always()
         run: |
           export RAW_DIR="${GITHUB_WORKSPACE}/out/us-${{ matrix.state }}/statute"
           python adapters/dev_us_${{ matrix.state }}_statute_collect.py --verify || true
@@ -54,12 +57,15 @@ jobs:
           NY_OPENLEG_KEY: ${{ secrets.NY_OPENLEG_KEY }}
 
       - name: Create tarball
+        if: always()
         run: |
-          tar czf ${{ matrix.state }}.tar.gz -C "${GITHUB_WORKSPACE}/out" us-${{ matrix.state }}
+          tar czf ${{ matrix.state }}.tar.gz -C "${GITHUB_WORKSPACE}/out" us-${{ matrix.state }} || true
 
       - name: Upload artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: statute-${{ matrix.state }}
           path: ${{ matrix.state }}.tar.gz
           retention-days: 7
+          if-no-files-found: warn
