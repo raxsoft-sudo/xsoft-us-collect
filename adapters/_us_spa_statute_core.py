@@ -16,6 +16,8 @@
 
 모드:
   --diag    : index_url 을 렌더 → <a href> 전량 + link_re 매칭 수 덤프(셀렉터 보정 근거)
+  --netcap  : 렌더 중 자동 XHR/fetch 응답 URL 전량 캡처 → statute API 엔드포인트 데이터 발굴
+              (추정 URL 금지·공개 API 만·발굴 실제 URL 로만 enum 보정. 6주 공통 표준)
   --enum    : 렌더 후 link_re 로 섹션 URL 추출 → _enum_laws.txt (link_re 필수)
   --collect : _enum_laws.txt 순회 → 각 섹션 렌더 후 HTML 저장 (SMOKE=N 지원)
   --verify  : 정적 코어와 동형 4지표(모수·저장·부재·고아·중복) — 네트워크 불요
@@ -33,6 +35,10 @@ import time
 from urllib.parse import urljoin
 
 EXT_DEFAULT = ".html"
+SPA_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/120.0 Safari/537.36"
+)
 # 제네릭 섹션 링크 패턴 [추정] — CONFIG link_re 없으면 diag 참고용. enum 은 CONFIG link_re 필수.
 DEFAULT_LINK_RE = re.compile(
     r"(?:section|chapter|title|statute|article|/\d+-\d+|/ic/\d+)", re.I
@@ -56,12 +62,7 @@ def _render(cfg, url):
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         try:
-            page = browser.new_page(
-                user_agent=(
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                    "(KHTML, like Gecko) Chrome/120.0 Safari/537.36"
-                )
-            )
+            page = browser.new_page(user_agent=SPA_UA)
             resp = page.goto(url, wait_until=wait, timeout=nav_to)
             status = resp.status if resp else 0
             html = page.content()
@@ -193,9 +194,67 @@ def verify(cfg):
     print(f"판정 = {'PASS' if ok else 'FAIL'}")
 
 
+def netcap(cfg):
+    """index_url 렌더 중 자동 발생한 XHR/fetch 응답 URL 을 전량 캡처(추정 아님·관찰).
+    statute 목록 API 엔드포인트를 데이터로 노출 → 그 실제 URL 로만 link_re/index_url 보정.
+    공개 API 만·robots/ToS 준수·로그인/CAPTCHA 우회 안 함. 클릭 없는 초기 로드 XHR 한정."""
+    base, index_url = cfg["base"], cfg["index_url"]
+    print(f"=== {cfg['state'].upper()} 법전 SPA NETCAP (Playwright XHR/fetch URL 캡처) {base} ===")
+    print("[NETCAP] 공개 API 만·robots/ToS 준수·로그인/CAPTCHA 우회 안 함·추정 URL 금지")
+    from playwright.sync_api import sync_playwright  # 로컬 import 회피(GHA 전용)
+
+    wait = cfg.get("wait_until", "networkidle")
+    nav_to = int(cfg.get("nav_timeout_ms", 60000))
+    settle = int(cfg.get("netcap_settle_ms", 4000))
+    caps = []
+
+    def on_resp(resp):
+        try:
+            rt = resp.request.resource_type
+            if rt in ("xhr", "fetch"):
+                caps.append((resp.status, rt, resp.headers.get("content-type", ""), resp.url))
+        except Exception:
+            pass
+
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            try:
+                page = browser.new_page(user_agent=SPA_UA)
+                page.on("response", on_resp)
+                try:
+                    page.goto(index_url, wait_until=wait, timeout=nav_to)
+                except Exception as e:
+                    print(f"[NETCAP goto warn] {type(e).__name__}: {e}")
+                page.wait_for_timeout(settle)
+            finally:
+                browser.close()
+    except Exception as e:
+        print(f"[FATAL netcap] {type(e).__name__}: {e}")
+        sys.exit(1)
+
+    seen, rows = set(), []
+    for status, rt, ct, url in caps:
+        if url in seen:
+            continue
+        seen.add(url)
+        rows.append((status, rt, ct, url))
+    data_rows = [r for r in rows if any(k in r[2].lower() for k in ("json", "xml"))]
+    print(f"[NETCAP] XHR/fetch distinct 응답 {len(rows)}건 (json/xml {len(data_rows)}건)")
+    print("[NETCAP data 후보(json/xml)] =====")
+    for status, rt, ct, url in data_rows:
+        print(f"  [{status} {rt} {ct}] {url[:220]}")
+    print("[NETCAP 전체 XHR/fetch] =====")
+    for status, rt, ct, url in rows:
+        print(f"  [{status} {rt} {ct}] {url[:220]}")
+    if not rows:
+        print("[NETCAP] 초기 로드 XHR/fetch 0건 = 클릭/상호작용 유발 필요(추정 클릭 금지·재보고)")
+    sys.exit(0)
+
+
 def run(cfg):
     mode = sys.argv[1] if len(sys.argv) > 1 else "--diag"
     {
         "--diag": diag, "--probe": diag, "--enum": enum,
-        "--collect": collect, "--verify": verify,
+        "--collect": collect, "--verify": verify, "--netcap": netcap,
     }.get(mode, lambda c: print(f"미구현 모드: {mode}"))(cfg)

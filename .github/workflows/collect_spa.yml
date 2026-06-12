@@ -16,7 +16,7 @@ on:
         required: false
         default: '0'
       mode:
-        description: 'diag=렌더 DOM href 덤프 / collect=전수집'
+        description: 'diag=렌더 href 덤프 / netcap=XHR응답URL 캡처 / collect=전수집'
         required: false
         default: 'diag'
 
@@ -50,8 +50,14 @@ jobs:
           export RAW_DIR="${GITHUB_WORKSPACE}/out/us-${{ matrix.state }}/statute"
           python adapters/dev_us_${{ matrix.state }}_statute_collect.py --diag
 
+      - name: Run netcap
+        if: inputs.mode == 'netcap'
+        run: |
+          export RAW_DIR="${GITHUB_WORKSPACE}/out/us-${{ matrix.state }}/statute"
+          python adapters/dev_us_${{ matrix.state }}_statute_collect.py --netcap
+
       - name: Run enum
-        if: inputs.mode != 'diag'
+        if: inputs.mode != 'diag' && inputs.mode != 'netcap'
         run: |
           export RAW_DIR="${GITHUB_WORKSPACE}/out/us-${{ matrix.state }}/statute"
           export SMOKE="${{ inputs.smoke }}"
@@ -59,7 +65,7 @@ jobs:
           python adapters/dev_us_${{ matrix.state }}_statute_collect.py --enum || true
 
       - name: Run collect
-        if: inputs.mode != 'diag'
+        if: inputs.mode != 'diag' && inputs.mode != 'netcap'
         timeout-minutes: 330
         run: |
           export RAW_DIR="${GITHUB_WORKSPACE}/out/us-${{ matrix.state }}/statute"
@@ -67,18 +73,18 @@ jobs:
           python adapters/dev_us_${{ matrix.state }}_statute_collect.py --collect
 
       - name: Run verify
-        if: always() && inputs.mode != 'diag'
+        if: always() && inputs.mode != 'diag' && inputs.mode != 'netcap'
         run: |
           export RAW_DIR="${GITHUB_WORKSPACE}/out/us-${{ matrix.state }}/statute"
           python adapters/dev_us_${{ matrix.state }}_statute_collect.py --verify || true
 
       - name: Create tarball
-        if: always() && inputs.mode != 'diag'
+        if: always() && inputs.mode != 'diag' && inputs.mode != 'netcap'
         run: |
           tar czf ${{ matrix.state }}.tar.gz -C "${GITHUB_WORKSPACE}/out" us-${{ matrix.state }} || true
 
       - name: Upload artifact
-        if: always() && inputs.mode != 'diag'
+        if: always() && inputs.mode != 'diag' && inputs.mode != 'netcap'
         uses: actions/upload-artifact@v4
         with:
           name: statute-spa-${{ matrix.state }}
