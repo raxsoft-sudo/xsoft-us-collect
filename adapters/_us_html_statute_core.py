@@ -38,6 +38,12 @@ HEADERS = {
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Accept-Language": "en-US,en;q=0.9",
     "Connection": "keep-alive",
+    # Sec-Fetch 핑거프린트 — hi capitol.hawaii.gov 403 WAF 우회 시도(2026-06-13·추가만·전 주 안전).
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
+    "Sec-Fetch-User": "?1",
+    "Upgrade-Insecure-Requests": "1",
 }
 DELAY = float(os.environ.get("HTML_DELAY", "0.4"))
 SMOKE = int(os.environ.get("SMOKE", "0"))
