@@ -46,7 +46,23 @@ HEADERS = {
     "Upgrade-Insecure-Requests": "1",
 }
 DELAY = float(os.environ.get("HTML_DELAY", "0.4"))
-SMOKE = int(os.environ.get("SMOKE", "0"))
+
+
+def _smoke_env():
+    # 워크플로 boolean 입력(smoke=false/true)을 그대로 SMOKE env로 받아 int() 폭발 방지.
+    # false/빈값 = 0(풀수집) · true = 5(샘플) · 숫자문자열 = 그 수. 그 외 = 0.
+    v = os.environ.get("SMOKE", "0").strip().lower()
+    if v in ("", "false", "0", "no", "none"):
+        return 0
+    if v in ("true", "yes"):
+        return 5
+    try:
+        return int(v)
+    except ValueError:
+        return 0
+
+
+SMOKE = _smoke_env()
 
 CTX = ssl.create_default_context()
 CTX.check_hostname = False

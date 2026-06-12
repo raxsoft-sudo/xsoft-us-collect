@@ -186,7 +186,8 @@ def collect(cfg):
         urls = [ln.strip() for ln in f if ln.strip()]
     ext = cfg.get("ext", EXT_DEFAULT)
     delay = float(os.environ.get("SPA_DELAY", "0.5"))
-    smoke = int(os.environ.get("SMOKE", "0"))
+    _sv = os.environ.get("SMOKE", "0").strip().lower()
+    smoke = 5 if _sv in ("true", "yes") else (int(_sv) if _sv.isdigit() else 0)
     if cfg.get("http_json"):
         return _collect_http(cfg, raw, urls, ext, delay, smoke)
     ok = miss = skip = 0

@@ -165,7 +165,8 @@ def collect(cfg):
         urls = [ln.strip() for ln in f if ln.strip()]
     os.makedirs(raw, exist_ok=True)
     delay = _delay()
-    smoke = int(os.environ.get("SMOKE", "0"))
+    _sv = os.environ.get("SMOKE", "0").strip().lower()
+    smoke = 5 if _sv in ("true", "yes") else (int(_sv) if _sv.isdigit() else 0)
     ok = miss = skip = 0
     for i, url in enumerate(urls, 1):
         path = os.path.join(raw, _fname(url))
