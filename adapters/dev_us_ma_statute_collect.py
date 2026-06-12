@@ -16,7 +16,7 @@ from _us_html_statute_core import run  # noqa: E402
 CONFIG = {
     "state": "ma",
     "base": "https://malegislature.gov",
-    "index_url": "https://malegislature.gov/Laws/GeneralLaws",
+    "index_url": "https://malegislature.gov/Laws/GeneralLaws/PartI",
     "ext": ".html",
     # chapter 목록 링크(Section 없이 Chapter 로 끝) — 관찰 섹션 URL 파생·diag 검증 전제
     "chapter_re": re.compile(
