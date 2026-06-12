@@ -34,7 +34,7 @@ import ssl
 import sys
 import time
 import urllib.request
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 
 EXT_DEFAULT = ".html"
 SPA_UA = (
@@ -104,8 +104,16 @@ def diag(cfg):
     matched = _abs_links(base, index_url, hrefs, cur)
     nums = sorted({h for h in hrefs if re.search(r"\d", h)})
     print(f"[DIAG] 렌더 후 전체href={len(hrefs)} 숫자포함distinct={len(nums)} link_re매칭={len(matched)}")
-    print(f"[DIAG hrefs] 샘플{min(20, len(nums))}:")
-    for h in nums[:20]:
+    # 디렉터리 prefix 분포 = 셀렉터 보정 근거(어느 경로가 본문 트리인지 관찰·추정 아님).
+    prefix = {}
+    for h in nums:
+        p = re.sub(r"[^/]*$", "", urlparse(h).path)  # 마지막 파일명 제거 = 디렉터리
+        prefix[p] = prefix.get(p, 0) + 1
+    print("[DIAG prefix] (디렉터리별 숫자href 수, 상위 25):")
+    for p, c in sorted(prefix.items(), key=lambda x: -x[1])[:25]:
+        print(f"  {c:5d}  {p}")
+    print(f"[DIAG hrefs] 샘플{min(80, len(nums))}:")
+    for h in nums[:80]:
         print(f"  HREF {h}")
 
 
