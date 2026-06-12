@@ -295,6 +295,12 @@ def netcap(cfg):
         raw, enum_file = _paths(cfg)
         os.makedirs(raw, exist_ok=True)
         api_urls = [u for (_, _, _, u) in rows if api_re.search(u)]
+        # enum_sub = (정규식, 치환) = 관찰된 목록 URL을 측정으로 확인된 전문 URL 패턴으로 변환.
+        #   예: in = 목차 .json 36건 enum → 확인된 .html(전문) 36건으로 치환(추정 아님·둘 다 측정).
+        sub = cfg.get("enum_sub")
+        if sub:
+            api_urls = sorted({re.sub(sub[0], sub[1], u) for u in api_urls})
+            print(f"[NETCAP enum] enum_sub 변환 적용 {sub[0]} → {sub[1]}")
         if api_urls:
             with open(enum_file, "w") as f:
                 for u in api_urls:

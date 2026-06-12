@@ -22,8 +22,10 @@ CONFIG = {
     "index_url": "https://iga.in.gov/laws/current/ic",
     "ext": ".html",
     "http_json": True,
-    # ★ 측정중 = json은 목차뿐(본문0) 확정 → 형제 Title_N.html(netcap 관찰 200 text/html) 전문 여부 측정.
-    "api_re": re.compile(r"/ic/\d+/Title_[0-9.]+\.html$"),
+    # ★ 측정 확정(run27441687216) = Title_N.json은 목차뿐(본문0) / Title_N.html은 전문(태그제거 191KB·Sec.189).
+    #   api_re = netcap 발굴 36 Title_N.json(완전한 타이틀 목록) 매칭. 둘 다 측정값이라 파생 정당(추정 아님).
+    "api_re": re.compile(r"/ic/\d+/Title_[0-9.]+\.json$"),
+    "enum_sub": (r"\.json$", ".html"),
 }
 
 if __name__ == "__main__":
