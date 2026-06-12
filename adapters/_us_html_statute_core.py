@@ -32,6 +32,13 @@ import urllib.error
 import urllib.parse
 
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0 Safari/537.36"
+# 리치 브라우저 헤더 — WAF 핑거프린트 우회용(2026-06-13 (C)접근장벽 보정). 전 주 안전.
+HEADERS = {
+    "User-Agent": UA,
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Connection": "keep-alive",
+}
 DELAY = float(os.environ.get("HTML_DELAY", "0.4"))
 SMOKE = int(os.environ.get("SMOKE", "0"))
 
@@ -55,8 +62,8 @@ def _safe_url(u):
     return urllib.parse.urlunsplit((parts.scheme, parts.netloc, path, query, parts.fragment))
 
 
-def http_get(url, timeout=30):
-    req = urllib.request.Request(_safe_url(url), headers={"User-Agent": UA})
+def http_get(url, timeout=60):
+    req = urllib.request.Request(_safe_url(url), headers=HEADERS)
     with urllib.request.urlopen(req, timeout=timeout, context=CTX) as r:
         return r.getcode(), r.read()
 
@@ -65,7 +72,7 @@ def fetch_to_file_retry(url, path, backoff=2.0, max_retry=5):
     wait = backoff
     for attempt in range(max_retry):
         try:
-            req = urllib.request.Request(_safe_url(url), headers={"User-Agent": UA})
+            req = urllib.request.Request(_safe_url(url), headers=HEADERS)
             with urllib.request.urlopen(req, timeout=120, context=CTX) as r:
                 if r.getcode() != 200:
                     print(f"[MISS status={r.getcode()}] {url[:120]}", flush=True)
