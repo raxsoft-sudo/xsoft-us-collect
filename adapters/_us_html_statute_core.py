@@ -15,8 +15,10 @@ CONFIG 키:
   index_url  : 법전 목차/진입 URL
   link_re    : 본문 섹션 링크 정규식 (group(1)=href) [추정·probe 보정]
   chapter_re : (선택) 챕터 링크 정규식 — 2단계 트리일 때
-  fallback   : (선택) (template, lo, hi) 링크 파싱 실패 시 챕터 범위 폴백 [추정]
   ext        : 본문 저장 확장자 (.html 기본 · .pdf 가능)
+
+★ 조작 폴백 금지(0순위 계명1) = 인덱스에서 링크 0건 파싱 시 hard-fail(sys.exit 1).
+  추정 챕터 범위로 무작정 채우지 않는다. GHA 미국 IP enum 로그로 셀렉터 보정 후 재발진.
 
 모드: --probe / --enum / --collect / --verify
 """
@@ -124,19 +126,26 @@ def probe(cfg):
     print("주의: 지오블록 가능. 셀렉터는 GHA probe 로그로 보정 필요 [추정]")
 
 
+def _fatal_zero(kind, index_url):
+    # 0순위 계명1 = 무작정 조작 폴백 금지. 0파싱 = 구조 미확인 → hard-fail.
+    # GHA(미국 IP) enum 로그의 실제 응답으로 셀렉터(link_re·chapter_re) 보정 후 재발진.
+    print(f"[FATAL] 인덱스 {kind} 파싱 0건 — 구조 미확인. 조작 폴백 제거됨(계명1).")
+    print(f"[FATAL] INDEX_URL={index_url} 응답을 GHA 로그로 확인하고 셀렉터 보정 필요.")
+    sys.exit(1)
+
+
 def _enum_urls(cfg):
     base, index_url = cfg["base"], cfg["index_url"]
     code, body = http_get(index_url)
     if code != 200:
         print(f"[ERR] 인덱스 비200: {code}")
         sys.exit(1)
+    print(f"[DIAG index] {index_url} status={code} body_len={len(body)}")
     # 1단계: 챕터 트리가 있으면 챕터별 섹션 수집
     if cfg.get("chapter_re"):
         chapters = _links(base, index_url, body, cfg["chapter_re"])
-        if not chapters and cfg.get("fallback"):
-            tpl, lo, hi = cfg["fallback"]
-            print(f"[WARN] 챕터 파싱 실패 — 폴백 {lo}~{hi} [추정]")
-            chapters = [tpl.format(n=i) for i in range(lo, hi + 1)]
+        if not chapters:
+            _fatal_zero("챕터", index_url)
         out, seen = [], set()
         for ci, ch in enumerate(chapters, 1):
             try:
@@ -153,13 +162,13 @@ def _enum_urls(cfg):
             time.sleep(DELAY)
             if SMOKE and len(out) >= SMOKE:
                 return out[:SMOKE]
+        if not out:
+            _fatal_zero("섹션(챕터 순회)", index_url)
         return out
     # 1단계 직접: 인덱스에서 바로 섹션 링크
     secs = _links(base, index_url, body, cfg.get("link_re", DEFAULT_LINK_RE))
-    if not secs and cfg.get("fallback"):
-        tpl, lo, hi = cfg["fallback"]
-        print(f"[WARN] 섹션 파싱 실패 — 폴백 {lo}~{hi} [추정]")
-        secs = [tpl.format(n=i) for i in range(lo, hi + 1)]
+    if not secs:
+        _fatal_zero("섹션", index_url)
     return secs[:SMOKE] if SMOKE else secs
 
 
