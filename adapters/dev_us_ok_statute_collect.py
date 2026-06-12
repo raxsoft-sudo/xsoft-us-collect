@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""오클라호마 법전 (www.oklegislature.gov) — ④HTML파서 스캐폴드. 본문 PD.
-도메인=매트릭스 본표 [측정] / index·셀렉터=[추정] GHA probe 로그로 보정 전제.
-지오블록으로 WSL(한국 IP) probe 불가 → GHA(미국 IP) 실행 전제."""
+"""오클라호마 법전 (www.oklegislature.gov) — SPA(ASP.NET postback) Playwright 전환 2026-06-13.
+정적 코어 0파싱 확정(diag run27437998104 link_re=0·href=css/EBillTrack/미디어).
+TitleIndex.aspx 는 __doPostBack JS 네비 → SPA 코어 렌더 측정. ★ link_re 미기재(추정 금지·계명1).
+실행 = GHA(미국 IP) headless chromium 전용. 로컬 Playwright 금지(OOM)."""
 import sys
 import os
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _us_html_statute_core import run  # noqa: E402
+from _us_spa_statute_core import run  # noqa: E402
 
 CONFIG = {
     "state": "ok",
