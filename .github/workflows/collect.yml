@@ -11,6 +11,10 @@ on:
         description: '0=전수, N>0=N건 후 중단'
         required: false
         default: '0'
+      mode:
+        description: 'collect=전수집 / diag=인덱스 href 구조만 덤프'
+        required: false
+        default: 'collect'
 
 jobs:
   collect:
@@ -30,7 +34,16 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Run diag
+        if: inputs.mode == 'diag'
+        run: |
+          export RAW_DIR="${GITHUB_WORKSPACE}/out/us-${{ matrix.state }}/statute"
+          python adapters/dev_us_${{ matrix.state }}_statute_collect.py --diag
+        env:
+          NY_OPENLEG_KEY: ${{ secrets.NY_OPENLEG_KEY }}
+
       - name: Run enum
+        if: inputs.mode != 'diag'
         run: |
           export RAW_DIR="${GITHUB_WORKSPACE}/out/us-${{ matrix.state }}/statute"
           export SMOKE="${{ inputs.smoke }}"
@@ -40,6 +53,7 @@ jobs:
           NY_OPENLEG_KEY: ${{ secrets.NY_OPENLEG_KEY }}
 
       - name: Run collect
+        if: inputs.mode != 'diag'
         timeout-minutes: 330
         run: |
           export RAW_DIR="${GITHUB_WORKSPACE}/out/us-${{ matrix.state }}/statute"
@@ -49,7 +63,7 @@ jobs:
           NY_OPENLEG_KEY: ${{ secrets.NY_OPENLEG_KEY }}
 
       - name: Run verify
-        if: always()
+        if: always() && inputs.mode != 'diag'
         run: |
           export RAW_DIR="${GITHUB_WORKSPACE}/out/us-${{ matrix.state }}/statute"
           python adapters/dev_us_${{ matrix.state }}_statute_collect.py --verify || true
@@ -57,12 +71,12 @@ jobs:
           NY_OPENLEG_KEY: ${{ secrets.NY_OPENLEG_KEY }}
 
       - name: Create tarball
-        if: always()
+        if: always() && inputs.mode != 'diag'
         run: |
           tar czf ${{ matrix.state }}.tar.gz -C "${GITHUB_WORKSPACE}/out" us-${{ matrix.state }} || true
 
       - name: Upload artifact
-        if: always()
+        if: always() && inputs.mode != 'diag'
         uses: actions/upload-artifact@v4
         with:
           name: statute-${{ matrix.state }}

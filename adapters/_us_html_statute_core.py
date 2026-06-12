@@ -158,6 +158,25 @@ def _fatal_zero(kind, index_url, body=b""):
     sys.exit(1)
 
 
+def diag(cfg):
+    # 관찰 전용(조작 아님) = 인덱스 실제 href 구조를 GHA 미국 IP 로그에 노출.
+    # 현재 link_re/chapter_re 매칭 수도 같이 출력 → 셀렉터 보정 근거.
+    base, index_url = cfg["base"], cfg["index_url"]
+    print(f"=== {cfg['state'].upper()} 법전 DIAG ({base}) ===")
+    try:
+        code, body = http_get(index_url)
+    except Exception as e:
+        print(f"[FATAL] index fetch {type(e).__name__}: {e}")
+        sys.exit(1)
+    print(f"[DIAG index] {index_url} status={code} body_len={len(body)}")
+    cur_link = cfg.get("link_re", DEFAULT_LINK_RE)
+    print(f"[DIAG] 현재 link_re 매칭={len(_links(base, index_url, body, cur_link))}")
+    if cfg.get("chapter_re"):
+        print(f"[DIAG] 현재 chapter_re 매칭={len(_links(base, index_url, body, cfg['chapter_re']))}")
+    _dump_hrefs(body, n=80)
+    sys.exit(0)
+
+
 def _enum_urls(cfg):
     base, index_url = cfg["base"], cfg["index_url"]
     code, body = http_get(index_url)
@@ -267,6 +286,6 @@ def verify(cfg):
 
 def run(cfg):
     mode = sys.argv[1] if len(sys.argv) > 1 else "--probe"
-    {"--probe": probe, "--enum": enum, "--collect": collect, "--verify": verify}.get(
+    {"--probe": probe, "--diag": diag, "--enum": enum, "--collect": collect, "--verify": verify}.get(
         mode, lambda c: print(f"미구현 모드: {mode}")
     )(cfg)
