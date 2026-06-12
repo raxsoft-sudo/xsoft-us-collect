@@ -46,8 +46,17 @@ DEFAULT_LINK_RE = re.compile(
 )
 
 
+def _safe_url(u):
+    # 인코딩 안 된 공백 등을 포함한 URL(예 IL ?Chapter=GENERAL PROVISIONS)을 표준 인코딩.
+    # 기존 %xx·구분자(= & / ?)는 보존 → 이중 인코딩 회피.
+    parts = urllib.parse.urlsplit(u)
+    path = urllib.parse.quote(parts.path, safe="/%:@")
+    query = urllib.parse.quote(parts.query, safe="=&%:@/+,;!$'()*~")
+    return urllib.parse.urlunsplit((parts.scheme, parts.netloc, path, query, parts.fragment))
+
+
 def http_get(url, timeout=30):
-    req = urllib.request.Request(url, headers={"User-Agent": UA})
+    req = urllib.request.Request(_safe_url(url), headers={"User-Agent": UA})
     with urllib.request.urlopen(req, timeout=timeout, context=CTX) as r:
         return r.getcode(), r.read()
 
@@ -56,9 +65,10 @@ def fetch_to_file_retry(url, path, backoff=2.0, max_retry=5):
     wait = backoff
     for attempt in range(max_retry):
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": UA})
+            req = urllib.request.Request(_safe_url(url), headers={"User-Agent": UA})
             with urllib.request.urlopen(req, timeout=120, context=CTX) as r:
                 if r.getcode() != 200:
+                    print(f"[MISS status={r.getcode()}] {url[:120]}", flush=True)
                     return False
                 tmp = path + ".part"
                 with open(tmp, "wb") as f:
@@ -74,6 +84,7 @@ def fetch_to_file_retry(url, path, backoff=2.0, max_retry=5):
                 time.sleep(wait)
                 wait *= 2
                 continue
+            print(f"[MISS HTTP {e.code}] {url[:120]}", flush=True)
             return False
         except Exception as ex:
             print(f"[ERR attempt={attempt}] {type(ex).__name__}: {ex}", flush=True)
