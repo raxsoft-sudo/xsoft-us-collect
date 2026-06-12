@@ -116,6 +116,19 @@ def probe():
 def enum():
     """타이틀 1~46 → 챕터/섹션 링크 파싱 → 섹션 URL 열거."""
     os.makedirs(RAW_DIR, exist_ok=True)
+
+    # [접지 진단] 인덱스 실제 구조를 GHA 미국 IP 로그로 확인 (0순위 계명1 = 무작정 재작성 금지).
+    # TITLE<N>.htm 패턴이 US IP에서 404 → 인덱스 hrefs로 실제 타이틀 URL 구조 확인 후 보정.
+    try:
+        icode, ibody = http_get(INDEX_URL)
+        itext = ibody.decode("utf-8", "ignore")
+        print(f"[DIAG index] status={icode} body_len={len(ibody)}")
+        print(f"[DIAG index] head3000={itext[:3000]!r}")
+        ihrefs = re.findall(r'href=["\']([^"\']+)["\']', itext, re.IGNORECASE)
+        print(f"[DIAG index] href수={len(ihrefs)} 샘플40={ihrefs[:40]}")
+    except Exception as e:
+        print(f"[DIAG index] ERR {type(e).__name__}: {e}")
+
     all_sections = []
     seen = set()
 

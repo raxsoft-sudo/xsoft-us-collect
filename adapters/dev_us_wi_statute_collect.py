@@ -108,8 +108,23 @@ def probe():
 def enum():
     """인덱스 페이지 → 챕터 ID 목록 → _enum_laws.txt."""
     os.makedirs(RAW_DIR, exist_ok=True)
+
+    # [접지 진단] 인덱스 실제 구조를 GHA 미국 IP 로그로 확인 (0순위 계명1 = 무작정 재작성 금지).
+    # US IP에서도 INDEX_URL 타임아웃 → 더 긴 타임아웃·대체 경로를 실제 응답으로 확인 후 보정.
+    for diag_to in (30, 90):
+        try:
+            icode, ibody = http_get(INDEX_URL, timeout=diag_to)
+            itext = ibody.decode("utf-8", "ignore")
+            print(f"[DIAG index] timeout={diag_to} status={icode} body_len={len(ibody)}")
+            print(f"[DIAG index] head3000={itext[:3000]!r}")
+            ihrefs = re.findall(r'href=["\']([^"\']+)["\']', itext, re.IGNORECASE)
+            print(f"[DIAG index] href수={len(ihrefs)} 샘플40={ihrefs[:40]}")
+            break
+        except Exception as e:
+            print(f"[DIAG index] timeout={diag_to} ERR {type(e).__name__}: {e}")
+
     try:
-        code, body = http_get(INDEX_URL)
+        code, body = http_get(INDEX_URL, timeout=90)
         if code != 200:
             print(f"[ERR] 인덱스 비200: {code}")
             sys.exit(1)
