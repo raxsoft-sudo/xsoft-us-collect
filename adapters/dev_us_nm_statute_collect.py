@@ -12,10 +12,17 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _us_spa_statute_core import run  # noqa: E402
 
+# 셀렉터 보정(2026-06-13) = SPA diag networkidle 60s timeout(무거운 검색포털) →
+#   netcap 으로 초기 로드 XHR/fetch API 측정. wait_until=domcontentloaded 로 settle 회피,
+#   타임아웃 120s 상향·settle 8s 로 초기 API 발화 포착(in iga.in.gov REST 발굴 선례).
+#   ★ 추정 URL 금지 = netcap 실측 응답으로만 link_re/index_url 보정(계명1).
 CONFIG = {
     "state": "nm",
     "base": "https://nmonesource.com",
     "index_url": "https://nmonesource.com/",
+    "wait_until": "domcontentloaded",
+    "nav_timeout_ms": 120000,
+    "netcap_settle_ms": 8000,
     "ext": ".html",
 }
 
