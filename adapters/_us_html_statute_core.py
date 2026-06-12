@@ -167,6 +167,27 @@ def _dump_hrefs(body, n=40):
         print(f"  HREF {h[:160]}")
 
 
+def _dump_path_tree(body, index_url, n=60):
+    # 다단 진입점 측정(추정 아님·관찰 정밀화) = index 경로 prefix 포함 전체 distinct href를
+    # 깊이(슬래시 수)별로 노출. 숫자 없는 Part/Title 진입점도 누락 없이 측정.
+    if not body:
+        return
+    idx_path = urllib.parse.urlsplit(index_url).path.rstrip("/")
+    if not idx_path:
+        return
+    text = body.decode("utf-8", "ignore")
+    prefixed = sorted({h for h in _HREF_RE.findall(text) if idx_path in h})
+    depth = {}
+    for h in prefixed:
+        p = urllib.parse.urlsplit(h).path
+        d = p.rstrip("/").count("/")
+        depth[d] = depth.get(d, 0) + 1
+    print(f"[DIAG path] index_path={idx_path} 포함 distinct href={len(prefixed)}")
+    print(f"[DIAG path] 깊이분포(path 슬래시수)={dict(sorted(depth.items()))}")
+    for h in prefixed[:n]:
+        print(f"  PATH {h[:160]}")
+
+
 def _fatal_zero(kind, index_url, body=b""):
     # 0순위 계명1 = 무작정 조작 폴백 금지. 0파싱 = 구조 미확인 → hard-fail.
     # GHA(미국 IP) enum 로그의 실제 응답으로 셀렉터(link_re·chapter_re) 보정 후 재발진.
@@ -190,6 +211,7 @@ def diag(cfg):
     cur_link = cfg.get("link_re", DEFAULT_LINK_RE)
     print(f"[DIAG] 현재 link_re 매칭={len(_links(base, index_url, body, cur_link))}")
     _dump_hrefs(body, n=80)
+    _dump_path_tree(body, index_url)
     # 2단 트리 = chapter_re 가 있으면 첫 챕터 페이지까지 받아 섹션 구조도 관찰.
     if cfg.get("chapter_re"):
         chs = _links(base, index_url, body, cfg["chapter_re"])
