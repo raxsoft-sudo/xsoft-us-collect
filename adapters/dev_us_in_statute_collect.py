@@ -20,10 +20,10 @@ CONFIG = {
     "state": "in",
     "base": "https://iga.in.gov",
     "index_url": "https://iga.in.gov/laws/current/ic",
-    "ext": ".json",
+    "ext": ".html",
     "http_json": True,
-    # api_re = netcap 발굴 statute API URL 패턴(관찰 정본·추정 금지).
-    "api_re": re.compile(r"/ic/\d+/Title_[0-9.]+\.json$"),
+    # ★ 측정중 = json은 목차뿐(본문0) 확정 → 형제 Title_N.html(netcap 관찰 200 text/html) 전문 여부 측정.
+    "api_re": re.compile(r"/ic/\d+/Title_[0-9.]+\.html$"),
 }
 
 if __name__ == "__main__":
