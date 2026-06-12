@@ -130,9 +130,11 @@ def enum():
                 ids.append(cid)
 
     if not ids:
-        # 폴백: 숫자 1~990 범위 추정 (GHA probe로 보정)
-        print("[WARN] 인덱스 파싱 실패 — 폴백 챕터 범위 1~990 사용 [추정]")
-        ids = [str(i) for i in range(1, 991)]
+        # 인덱스 파싱 0건 = 구조 미확인. 조작 폴백 금지(0순위 계명1).
+        # GHA 미국 IP enum 로그로 실제 챕터 링크 패턴 확인 후 정규식 보정.
+        print("[FATAL] 인덱스 챕터 링크 파싱 0건 — 구조 미확인. 조작 폴백 제거됨.")
+        print(f"[FATAL] INDEX_URL={INDEX_URL} 응답을 GHA 로그로 확인하고 CHAPTER_RE 보정 필요.")
+        sys.exit(1)
 
     if SMOKE > 0:
         ids = ids[:SMOKE]
