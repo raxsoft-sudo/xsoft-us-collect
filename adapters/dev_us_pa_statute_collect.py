@@ -14,8 +14,8 @@ from _us_html_statute_core import run  # noqa: E402
 #   /statutes/consolidated/view-statute?txtType=HTM&amp;ttl=NN (HTM·PDF·DOC 혼재 → HTM만).
 CONFIG = {
     "state": "pa",
-    "base": "https://www.legis.state.pa.us",
-    "index_url": "https://www.legis.state.pa.us/cfdocs/legis/LI/Public/cons_index.cfm",
+    "base": "https://www.palegis.us",
+    "index_url": "https://www.palegis.us/statutes/consolidated",
     "link_re": re.compile(
         r'href=["\'](/statutes/consolidated/view-statute\?txtType=HTM&amp;ttl=\d+)["\']',
         re.IGNORECASE,
