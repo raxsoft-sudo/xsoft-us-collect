@@ -303,6 +303,17 @@ def _fname(cfg, url):
     return (stem or "index") + cfg.get("ext", ".html")
 
 
+def _chunk_slice(items, tag):
+    # GHA 매트릭스 청크 분할: CHUNK_N>1 이면 i % CHUNK_N == CHUNK_I 슬라이스만.
+    # enum 은 전수(결정적) → 청크 합집합 = 전수. 기본값(CHUNK_N=1)=무분할.
+    cn = int(os.environ.get("CHUNK_N", "1"))
+    ci = int(os.environ.get("CHUNK_I", "0"))
+    if cn > 1:
+        items = [x for idx, x in enumerate(items) if idx % cn == ci]
+        print(f"[{tag}][chunk] CHUNK_N={cn} CHUNK_I={ci} -> {len(items)} items")
+    return items
+
+
 def collect(cfg):
     raw, enum_file = _paths(cfg)
     if not os.path.exists(enum_file):
@@ -310,6 +321,7 @@ def collect(cfg):
         sys.exit(1)
     with open(enum_file) as f:
         urls = [ln.strip() for ln in f if ln.strip()]
+    urls = _chunk_slice(urls, cfg["state"])
     os.makedirs(raw, exist_ok=True)
     ok = miss = skip = 0
     for i, url in enumerate(urls, 1):
@@ -334,6 +346,7 @@ def verify(cfg):
         sys.exit(1)
     with open(enum_file) as f:
         urls = [ln.strip() for ln in f if ln.strip()]
+    urls = _chunk_slice(urls, cfg["state"])
     enum_set = set(urls)
     dup = len(urls) - len(enum_set)
     enum_fnames = {_fname(cfg, u) for u in enum_set}
