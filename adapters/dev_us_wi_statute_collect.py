@@ -119,6 +119,9 @@ def enum():
             print(f"[DIAG index] head3000={itext[:3000]!r}")
             ihrefs = re.findall(r'href=["\']([^"\']+)["\']', itext, re.IGNORECASE)
             print(f"[DIAG index] href수={len(ihrefs)} 샘플40={ihrefs[:40]}")
+            # 챕터 후보만 필터 출력 = 실제 링크 패턴 확인용(무추정 보정 근거). statutes/ch. 경로 후보.
+            cand = [h for h in ihrefs if re.search(r'statutes/(statutes/)?[0-9]', h) or 'ch.' in h.lower() or '/document/statutes' in h.lower()]
+            print(f"[DIAG index] 챕터후보수={len(cand)} 샘플60={cand[:60]}")
             break
         except Exception as e:
             print(f"[DIAG index] timeout={diag_to} ERR {type(e).__name__}: {e}")
