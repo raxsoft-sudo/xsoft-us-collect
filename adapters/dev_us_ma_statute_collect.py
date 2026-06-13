@@ -1,14 +1,24 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""매사추세츠 법전 (malegislature.gov) — 정적 다단 경로 측정 2026-06-13 (오빠 지시 B).
+"""매사추세츠 법전 (malegislature.gov General Laws) — ★ HOLD (열거 장벽 측정).
 
-정적 200 도달 확정(헤더보정 07a8725) → Part→Title→Chapter 다단을 diag로 측정.
-  루트 GeneralLaws = Part 진입점 5개(PartI~PartV) 정적 실재(run27440421293 _dump_path_tree).
-★ 이번 측정 = index_url=PartI 로 두고 _dump_path_tree(숫자없는 진입점 인식)로
-  Title 링크가 정적인지 깊이분포로 정밀 관찰. in 식 _dump_hrefs 맹점(숫자포함만) 차단.
-  - 정적 Title 확인 시 = link_re/chapter_re 관찰 보정 후 단계별 enum 경로 확정.
-  - JS 렌더(Title href 0) 재확인 시 = 막힘 확정·defer(추정 chapter_re 금지·계명1).
-실행 = GHA(미국 IP) 정적 코어. link_re 미기재(관찰 후 보정). 로컬 금지(지오블록)."""
+측정 결과 (2026-06-14 GHA 미국 IP diag) :
+  (1) Part 인덱스 /Laws/GeneralLaws/PartI = status 200·body 120KB지만 Title 링크 0건
+      = CSR(JS 렌더). 정적 HTML에 하위 트리 없음 (run 27479839243).
+  (2) Chapter 페이지 /Laws/GeneralLaws/PartI/TitleI/Chapter2 = status 200·정적 렌더.
+      섹션 링크 다수 = /Laws/GeneralLaws/Part{R}/Title{R}/Chapter{N}/Section{N}
+      (link_re 66건 매칭 · run 27480278804). 본문 단위 = Section 페이지.
+  (3) 간헐 타임아웃 = 첫 Chapter diag URLError timed out → 재시도 성공 (리서치 0614
+      "타임아웃 빈번·저속 크롤" 경고 일치). collect 시 긴 timeout·저병렬 필요.
+
+남은 장벽 = Part→Title→Chapter 열거. Part 인덱스가 CSR라 정적 파싱 불가.
+다음 단계 (별도 세션) = 둘 중 하나 :
+  A. 본 어댑터를 _us_spa_statute_core 로 전환 → --netcap 으로 Title/Chapter 트리
+     API(XHR) 발굴 → apicollect 열거 (collect_spa.yml).
+  B. 권위 있는 Part/Title/Chapter 목록 확보(리서치 = Part I~V 확정) → Chapter URL 생성
+     → 정적 Chapter 페이지에서 Section 링크 수집(2단 코어 그대로).
+라이선스 = 퍼블릭도메인(government edicts). 주석·notes 비혼입. 로컬 금지(지오블록)."""
+import re
 import sys
 import os
 
@@ -18,10 +28,14 @@ from _us_html_statute_core import run  # noqa: E402
 CONFIG = {
     "state": "ma",
     "base": "https://malegislature.gov",
-    # diag 임시 = Chapter 페이지가 섹션 링크를 정적 렌더하는지 측정(Part 인덱스는 JS=0건 확인).
-    "index_url": "https://malegislature.gov/Laws/GeneralLaws/PartI/TitleI/Chapter2",
+    "index_url": "https://malegislature.gov/Laws/GeneralLaws",
+    # ★ 확정 측정 = Chapter 페이지의 Section 링크 패턴(run 27480278804). 열거 장벽 해소 후 사용.
+    "link_re": re.compile(
+        r'href=["\'](/Laws/GeneralLaws/Part[IVX]+/Title[IVX]+/Chapter\d+[A-Za-z]?/Section[0-9A-Za-z]+)["\']',
+        re.IGNORECASE,
+    ),
+    # chapter_re = Part 인덱스 CSR라 정적 열거 불가 = netcap/권위목록 확보 후 보정(추정 금지·계명1).
     "ext": ".html",
-    # link_re/chapter_re = GHA --diag 관찰 후 보정(추정 금지·계명1).
 }
 
 if __name__ == "__main__":
