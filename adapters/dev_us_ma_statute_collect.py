@@ -18,9 +18,10 @@ from _us_html_statute_core import run  # noqa: E402
 CONFIG = {
     "state": "ma",
     "base": "https://malegislature.gov",
-    "index_url": "https://malegislature.gov/Laws/GeneralLaws/PartI",
+    # diag 임시 = Chapter 페이지가 섹션 링크를 정적 렌더하는지 측정(Part 인덱스는 JS=0건 확인).
+    "index_url": "https://malegislature.gov/Laws/GeneralLaws/PartI/TitleI/Chapter2",
     "ext": ".html",
-    # link_re/chapter_re = GHA --diag _dump_path_tree 관찰 후 보정(추정 금지·계명1).
+    # link_re/chapter_re = GHA --diag 관찰 후 보정(추정 금지·계명1).
 }
 
 if __name__ == "__main__":
