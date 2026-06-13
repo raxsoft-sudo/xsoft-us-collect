@@ -349,6 +349,17 @@ def diag():
         # 본문 단위 추출 가능성 = 섹션 마커
         secs = re.findall(r'(?:&sect;|SECTION|§)\s*([0-9]+[0-9a-z\-\.]*)', rtext)
         print(f"[POST test CMA] 섹션마커 추정={len(secs)} 샘플10={secs[:10]}")
+        # ★ 실제 링크 형식 규명 = head + 모든 href + onclick + 모든 getlaw(...) 인자
+        print(f"[POST test CMA] head3000={rtext[:3000]!r}")
+        hrefs = re.findall(r'href=["\']?([^"\'>\s]+)', rtext, re.IGNORECASE)
+        print(f"[POST test CMA] href수={len(hrefs)} 샘플40={hrefs[:40]}")
+        oncl = re.findall(r'onclick=["\']([^"\']+)["\']', rtext, re.IGNORECASE)
+        print(f"[POST test CMA] onclick수={len(oncl)} 샘플20={oncl[:20]}")
+        gl_args = re.findall(r"getlaw\s*\(([^)]*)\)", rtext)
+        print(f"[POST test CMA] getlaw인자수={len(gl_args)} 샘플20={gl_args[:20]}")
+        # 모든 ** 데이터 토큰 (QLAWDATA prefix 없이도)
+        stars = sorted(set(re.findall(r"\*\*([A-Z0-9]{2,})", rtext)))
+        print(f"[POST test CMA] **토큰distinct={len(stars)} 샘플60={stars[:60]}")
     except Exception as e:
         print(f"[POST test CMA] ERR {type(e).__name__}: {e}")
     _dump("LEGINFO lawjs NVLWJ22P", "http://public.leginfo.state.ny.us/STATDOC/NVLWJ22P.js",
