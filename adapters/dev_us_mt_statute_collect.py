@@ -37,6 +37,17 @@ def _fetch(url, timeout=60):
         return r.read()
 
 
+def _chunk_slice(items, tag):
+    # GHA 매트릭스 청크 분할: CHUNK_N>1 이면 i % CHUNK_N == CHUNK_I 슬라이스만 처리.
+    # 기본값(CHUNK_N=1)은 무분할 = 전체. enum 결과는 결정적이라 청크 합집합 = 전수.
+    cn = int(os.environ.get("CHUNK_N", "1"))
+    ci = int(os.environ.get("CHUNK_I", "0"))
+    if cn > 1:
+        items = [x for idx, x in enumerate(items) if idx % cn == ci]
+        print(f"[{tag}][chunk] CHUNK_N={cn} CHUNK_I={ci} -> {len(items)} items")
+    return items
+
+
 def _join(parent_url, rel):
     # parent_url ends with a file; resolve "./x" or "../x" against its dir
     base = parent_url.rsplit("/", 1)[0]
@@ -114,6 +125,7 @@ def collect():
     if not os.path.exists(SECTIONS_FILE):
         enum()
     urls = [u.strip() for u in open(SECTIONS_FILE) if u.strip()]
+    urls = _chunk_slice(urls, "mt")
     ok = skip = miss = 0
     for i, u in enumerate(urls, 1):
         dest = _local_path(u)
@@ -141,6 +153,7 @@ def verify():
         print("[mt][verify] FAIL sections enum missing")
         sys.exit(0)
     urls = [u.strip() for u in open(SECTIONS_FILE) if u.strip()]
+    urls = _chunk_slice(urls, "mt")
     distinct = len(set(urls))
     present = 0
     for u in urls:
