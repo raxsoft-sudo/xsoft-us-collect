@@ -360,6 +360,17 @@ def diag():
         # 모든 ** 데이터 토큰 (QLAWDATA prefix 없이도)
         stars = sorted(set(re.findall(r"\*\*([A-Z0-9]{2,})", rtext)))
         print(f"[POST test CMA] **토큰distinct={len(stars)} 샘플60={stars[:60]}")
+        # ★ 법령 목록 본문부 (네비 이후) + submitForm 인자 전수
+        print(f"[POST test CMA] body3000_12000={rtext[3000:12000]!r}")
+        sf = re.findall(r"submitForm\(([^)]*)\)", rtext)
+        print(f"[POST test CMA] submitForm수={len(sf)} 샘플40={sf[:40]}")
+        # CSVARRAY.js = 법령 배열 후보
+        try:
+            cc, cb = http_get("http://public.leginfo.state.ny.us/STATDOC/CSVARRAY.js", timeout=60, headers=BROWSER_HEADERS)
+            ct = cb.decode("utf-8", "ignore")
+            print(f"[CSVARRAY] status={cc} body_len={len(cb)} head2500={ct[:2500]!r}")
+        except Exception as e:
+            print(f"[CSVARRAY] ERR {type(e).__name__}: {e}")
     except Exception as e:
         print(f"[POST test CMA] ERR {type(e).__name__}: {e}")
     _dump("LEGINFO lawjs NVLWJ22P", "http://public.leginfo.state.ny.us/STATDOC/NVLWJ22P.js",
