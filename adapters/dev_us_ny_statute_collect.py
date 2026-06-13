@@ -26,6 +26,7 @@ import sys
 import time
 import ssl
 import json
+import html
 import urllib.request
 import urllib.error
 import urllib.parse
@@ -138,18 +139,15 @@ def fetch_lawid_candidates():
     for label, url in [("wiki", WIKI_URL), ("lumen", LUMEN_URL)]:
         try:
             code, body = http_get(url, timeout=60, headers=BROWSER_HEADERS)
-            text = body.decode("utf-8", "ignore")
+            text = html.unescape(body.decode("utf-8", "ignore"))  # &#8211; → – 등 엔티티 복원
             print(f"[cand {label}] status={code} body_len={len(body)}")
             p1 = re.findall(r'\(([A-Z]{2,4})\)', text)          # 괄호 약어 (BNK)
             p2 = re.findall(r'/laws/([A-Z]{2,4})\b', text)       # nysenate lawID 링크
-            p3 = re.findall(r'>\s*([A-Z]{2,4})\s*<', text)       # 표 셀 단독 대문자 토큰
-            # Lumen Appendix B = "CODE - 법령명" / "CODE – 법령명" 인덱스 행
-            p4 = re.findall(r'\b([A-Z]{2,4})\s*[-–—:]\s*[A-Z][a-z]', text)
-            # 표 셀 직후 대문자 코드 (td>CODE</td><td>Name)
-            p5 = re.findall(r'<td[^>]*>\s*([A-Z]{2,4})\s*</td>', text)
-            for t in p1 + p2 + p3 + p4 + p5:
+            # Lumen Appendix B = "CODE – 법령명" 인덱스 행 (엔티티 복원 후 대시·콜론)
+            p4 = re.findall(r'>\s*([A-Z]{2,4})\s*[\-–—:]\s*[A-Z]', text)
+            for t in p1 + p2 + p4:
                 cands.add(t.upper())
-            print(f"[cand {label}] 괄호={len(set(p1))} 링크={len(set(p2))} 셀={len(set(p3))} 인덱스행={len(set(p4))} td={len(set(p5))}")
+            print(f"[cand {label}] 괄호={len(set(p1))} 링크={len(set(p2))} 인덱스행={len(set(p4))}")
         except Exception as e:
             print(f"[cand {label}] ERR {type(e).__name__}: {e}")
     return sorted(cands)
