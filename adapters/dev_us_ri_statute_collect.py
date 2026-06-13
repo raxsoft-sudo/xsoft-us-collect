@@ -132,8 +132,12 @@ def enum():
     all_sections = []
     seen = set()
 
+    def is_index(u):
+        return u.rstrip("/").upper().endswith("INDEX.HTM")
+
     for t in range(1, TITLE_MAX + 1):
-        title_url = f"{INDEX_URL}TITLE{t}.htm"
+        # [측정:GHA 인덱스 href = TITLE<N>/INDEX.HTM] 디렉터리+INDEX.HTM 구조 (구 TITLE<N>.htm 404 정정)
+        title_url = f"{INDEX_URL}TITLE{t}/INDEX.HTM"
         try:
             code, body = http_get(title_url)
             if code != 200:
@@ -146,13 +150,27 @@ def enum():
             continue
 
         links = extract_links(body, title_url)
-        # 섹션 패턴 탐지: .htm 파일 중 TITLE<N> 하위 경로
-        sec_links = [l for l in links if f"TITLE{t}" in l and l.endswith(".htm")]
-        for sl in sec_links:
+        tkey = f"TITLE{t}/"
+        htm_links = [l for l in links if tkey in l.upper() and l.lower().endswith(".htm")]
+        # 인덱스 페이지(챕터 INDEX.HTM)는 한 단계 하강, leaf .htm은 섹션으로 수집
+        chap_idx = [l for l in htm_links if is_index(l) and l != title_url]
+        leaf = [l for l in htm_links if not is_index(l)]
+        if t <= 2:
+            print(f"[TITLE{t}] htm링크={len(htm_links)} 챕터인덱스={len(chap_idx)} leaf={len(leaf)} 샘플={htm_links[:4]}")
+        for sl in leaf:
             if sl not in seen:
-                seen.add(sl)
-                all_sections.append(sl)
-        print(f"[TITLE{t}] 섹션 후보={len(sec_links)} 누적={len(all_sections)}")
+                seen.add(sl); all_sections.append(sl)
+        for ci in chap_idx:
+            try:
+                ccode, cbody = http_get(ci)
+                if ccode == 200:
+                    for sl in extract_links(cbody, ci):
+                        if sl.lower().endswith(".htm") and not is_index(sl) and sl not in seen:
+                            seen.add(sl); all_sections.append(sl)
+            except Exception:
+                pass
+            time.sleep(DELAY)
+        print(f"[TITLE{t}] 누적 섹션={len(all_sections)}")
         time.sleep(DELAY)
 
         if SMOKE > 0 and len(all_sections) >= SMOKE:
