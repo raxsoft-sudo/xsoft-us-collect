@@ -46,8 +46,18 @@ LAW_ID_RE = re.compile(r'/legislation/laws/([A-Z0-9]+)', re.IGNORECASE)
 LEGINFO_BASE = "https://public.leginfo.state.ny.us"  # 2순위 무키 LRS (lawssrch.cgi)
 
 
-def http_get(url, timeout=30):
-    req = urllib.request.Request(url, headers={"User-Agent": UA})
+BROWSER_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Accept-Encoding": "identity",
+    "Connection": "keep-alive",
+    "Upgrade-Insecure-Requests": "1",
+}
+
+
+def http_get(url, timeout=30, headers=None):
+    req = urllib.request.Request(url, headers=headers or {"User-Agent": UA})
     with urllib.request.urlopen(req, timeout=timeout, context=CTX) as r:
         return r.getcode(), r.read()
 
@@ -270,10 +280,10 @@ def verify():
     print(f"판정 = {'PASS' if ok else 'FAIL'}")
 
 
-def _dump(label, url, extra_res=None):
-    """무키 경로 진단용 = status·body_len·head·href 덤프 (한 번에 구조 파악)."""
+def _dump(label, url, extra_res=None, timeout=30):
+    """무키 경로 진단용 = status·body_len·head·href 덤프 (완전 브라우저 헤더)."""
     try:
-        code, body = http_get(url)
+        code, body = http_get(url, timeout=timeout, headers=BROWSER_HEADERS)
         text = body.decode("utf-8", "ignore")
         print(f"[{label}] {url} status={code} body_len={len(body)}")
         print(f"[{label}] head1200={text[:1200]!r}")
@@ -301,11 +311,10 @@ def diag():
         print(f"[API nokey] HTTPError {e.code} = {'키필수' if e.code in (401,403) else e.reason}")
     except Exception as e:
         print(f"[API nokey] ERR {type(e).__name__}: {e}")
-    # 2) leginfo LRS (2순위 무키)
-    _dump("LEGINFO lawssrch", f"{LEGINFO_BASE}/lawssrch.cgi")
-    _dump("LEGINFO navigate", f"{LEGINFO_BASE}/navigate.cgi")
-    _dump("LEGINFO menugetf", f"{LEGINFO_BASE}/menugetf.cgi?COMMONQUERY=LAWS")
-    # 3) nysenate HTML 목록 + 샘플 법령(ABP=유기농산물?·BNK=은행법 등 실제 페이지 구조)
+    # 2) leginfo LRS (2순위 무키) = http + 긴 타임아웃(서버 느림 대응)
+    _dump("LEGINFO http menugetf", "http://public.leginfo.state.ny.us/menugetf.cgi?COMMONQUERY=LAWS", timeout=60)
+    _dump("LEGINFO http navigate", "http://public.leginfo.state.ny.us/navigate.cgi", timeout=60)
+    # 3) nysenate HTML = 완전 브라우저 헤더로 403 재판정 (헤더차단 vs IP대역차단 구분)
     _dump("NYSENATE list", "https://www.nysenate.gov/legislation/laws", [r'/legislation/laws/([A-Z0-9]{2,4})'])
     _dump("NYSENATE law BNK", "https://www.nysenate.gov/legislation/laws/BNK")
     print("=== DIAG 끝 (로그로 무키 경로·열거·섹션 구조 판정) ===")
