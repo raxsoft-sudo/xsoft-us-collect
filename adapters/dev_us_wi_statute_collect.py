@@ -34,12 +34,12 @@ CTX = ssl.create_default_context()
 CTX.check_hostname = False
 CTX.verify_mode = ssl.CERT_NONE
 
-# 챕터 번호 패턴: /statutes/statutes/<CH> 또는 숫자 챕터
+# 챕터 링크 구조 [측정:diag run 27474018196] = /document/statutes/<N>(HTML) + /document/statutes/<N>.pdf
 CHAPTER_RE = re.compile(
-    r'href=["\']([^"\']*(?:statutes/statutes/|statutes/ch\.)[^"\']+)["\']',
+    r'href=["\']([^"\']*document/statutes/[0-9][^"\']*)["\']',
     re.IGNORECASE,
 )
-CHAPTER_NUM_RE = re.compile(r'/statutes/(?:statutes/|ch\.)([0-9a-zA-Z_]+)', re.IGNORECASE)
+CHAPTER_NUM_RE = re.compile(r'/document/statutes/([0-9]+[A-Za-z]?)', re.IGNORECASE)
 
 
 def http_get(url, timeout=30):
@@ -174,8 +174,8 @@ def collect():
     os.makedirs(RAW_DIR, exist_ok=True)
     ok = miss = skip = 0
     for i, cid in enumerate(ids, 1):
-        # 챕터별 HTML 저장 (PDF는 GHA 로그 확인 후 보정)
-        url = f"{INDEX_URL}/{cid}"
+        # 챕터별 HTML 저장 [측정:diag run 27474018196] = /document/statutes/<N>
+        url = f"{BASE}/document/statutes/{cid}"
         path = os.path.join(RAW_DIR, f"ch_{cid}.html")
         if os.path.exists(path) and os.path.getsize(path) > 0:
             skip += 1
@@ -183,8 +183,8 @@ def collect():
         if fetch_to_file_retry(url, path):
             ok += 1
         else:
-            # PDF 패턴 시도
-            url_pdf = f"{BASE}/document/statutes/ch.%20{cid}"
+            # PDF 폴백 = /document/statutes/<N>.pdf
+            url_pdf = f"{BASE}/document/statutes/{cid}.pdf"
             path_pdf = os.path.join(RAW_DIR, f"ch_{cid}.pdf")
             if fetch_to_file_retry(url_pdf, path_pdf):
                 ok += 1
@@ -222,7 +222,7 @@ def verify():
     print(f"식별자 중복 = {dup}")
     ok = rate < 1.0 and len(orphan) == 0 and dup == 0
     print(f"판정 = {'PASS' if ok else 'FAIL'}")
-    print("주의: 챕터 링크 구조·PDF 경로는 GHA probe 로그로 보정 필요 [추정]")
+    # 챕터 링크 구조 = /document/statutes/<N>(+.pdf) 확정 [측정:diag run 27474018196]
 
 
 if __name__ == "__main__":
