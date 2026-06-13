@@ -14,14 +14,18 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _us_html_statute_core import run  # noqa: E402
 
-# index = Title 49개(/Laws/Statutes/2025/Title{N}/). 3단 트리(Title→Chapter→Section).
-# diag 드릴 = chapter_re(Title 링크)로 첫 Title 페이지를 받아 챕터·섹션 구조 관찰(추정금지).
+# 구조 [측정:GHA run 27480063309] = index→Title 49개(/Laws/Statutes/2025/Title{N}/)
+#   → 각 Title 페이지에 Chapter 링크(/Laws/Statutes/2025/Chapter{N}). 챕터 페이지 = 본문 단위.
+# 기존 2단 코어 매핑 = chapter_re(외부 루프=Title) → link_re(본문=Chapter). 추가 드릴 불요.
 CONFIG = {
     "state": "fl",
     "base": "https://www.flsenate.gov",
     "index_url": "https://www.flsenate.gov/Laws/Statutes/2025/",
     "chapter_re": re.compile(
         r'href=["\'](/Laws/Statutes/2025/Title\d+/?)(?:#[^"\']*)?["\']', re.IGNORECASE
+    ),
+    "link_re": re.compile(
+        r'href=["\'](/Laws/Statutes/2025/Chapter\d+)["\']', re.IGNORECASE
     ),
     "ext": ".html",
 }
