@@ -372,14 +372,17 @@ def diag():
         except Exception as e:
             print(f"[CSVARRAY] ERR {type(e).__name__}: {e}")
         # ★★ 법령 인덱스(전체 lawID 열거원) = "Laws of New York" 메뉴 = submitForm("NVLWO","NVSTO")
-        try:
-            # submitForm 정의 확인용 NVMUJ04P.js
-            jc, jb = http_get("http://public.leginfo.state.ny.us/statdoc/NVMUJ04P.js", timeout=60, headers=BROWSER_HEADERS)
-            jt = jb.decode("utf-8", "ignore")
-            mfn = re.search(r"function submitForm\([^)]*\)\s*\{.{0,800}?\}", jt, re.DOTALL)
-            print(f"[NVMUJ04P submitForm]={mfn.group(0)[:800]!r}" if mfn else "[NVMUJ04P submitForm] 미발견")
-        except Exception as e:
-            print(f"[NVMUJ04P] ERR {type(e).__name__}: {e}")
+        # submitForm 정의 = 매 페이지 로드되는 NMCOM57P.js·NVMUJ04P.js 후보 전수 규명
+        for jsf in ["NMCOM57P.js", "NVMUJ04P.js", "CFUN07P.js"]:
+            try:
+                jc, jb = http_get(f"http://public.leginfo.state.ny.us/statdoc/{jsf}", timeout=60, headers=BROWSER_HEADERS)
+                jt = jb.decode("utf-8", "ignore")
+                mfn = re.search(r"function submitForm\b.{0,900}?\n\}", jt, re.DOTALL)
+                print(f"[{jsf}] len={len(jt)} submitForm={'O' if mfn else 'X'}")
+                if mfn:
+                    print(f"[{jsf} submitForm]={mfn.group(0)[:900]!r}")
+            except Exception as e:
+                print(f"[{jsf}] ERR {type(e).__name__}: {e}")
         # 법령 인덱스 직접 요청 후보 4종
         for label, act, body in [
             ("idx navNVLWO", "http://public.leginfo.state.ny.us/navigate.cgi?NVLWO:", {"hwebpage": "NVLWO", "parm1": "NVSTO"}),
