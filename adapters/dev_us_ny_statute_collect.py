@@ -371,10 +371,34 @@ def diag():
             print(f"[CSVARRAY] status={cc} body_len={len(cb)} head2500={ct[:2500]!r}")
         except Exception as e:
             print(f"[CSVARRAY] ERR {type(e).__name__}: {e}")
+        # ★★ 법령 인덱스(전체 lawID 열거원) = "Laws of New York" 메뉴 = submitForm("NVLWO","NVSTO")
+        try:
+            # submitForm 정의 확인용 NVMUJ04P.js
+            jc, jb = http_get("http://public.leginfo.state.ny.us/statdoc/NVMUJ04P.js", timeout=60, headers=BROWSER_HEADERS)
+            jt = jb.decode("utf-8", "ignore")
+            mfn = re.search(r"function submitForm\([^)]*\)\s*\{.{0,800}?\}", jt, re.DOTALL)
+            print(f"[NVMUJ04P submitForm]={mfn.group(0)[:800]!r}" if mfn else "[NVMUJ04P submitForm] 미발견")
+        except Exception as e:
+            print(f"[NVMUJ04P] ERR {type(e).__name__}: {e}")
+        # 법령 인덱스 직접 요청 후보 4종
+        for label, act, body in [
+            ("idx navNVLWO", "http://public.leginfo.state.ny.us/navigate.cgi?NVLWO:", {"hwebpage": "NVLWO", "parm1": "NVSTO"}),
+            ("idx lawNVSTO", "http://public.leginfo.state.ny.us/lawssrch.cgi?NVLWO:", {"hwebpage": "NVSTO"}),
+            ("idx lawLIST", "http://public.leginfo.state.ny.us/lawssrch.cgi?NVLWO:+&LIST=LAW", {"hwebpage": "LAWS"}),
+        ]:
+            try:
+                rr = opener.open(urllib.request.Request(act, data=urllib.parse.urlencode(body).encode()), timeout=60)
+                bb = rr.read().decode("utf-8", "ignore")
+                ids = sorted(set(re.findall(r"\*\*([A-Z0-9]{2,4})", bb)))
+                sfa = re.findall(r"getlaw\s*\(([^)]{0,120})\)", bb)
+                print(f"[{label}] status={rr.getcode()} len={len(bb)} **id수={len(ids)} 샘플60={ids[:60]}")
+                print(f"[{label}] getlaw인자수={len(sfa)} 샘플20={sfa[:20]}")
+                if len(ids) < 5 and len(sfa) < 5:
+                    print(f"[{label}] body2000_9000={bb[2000:9000]!r}")
+            except Exception as e:
+                print(f"[{label}] ERR {type(e).__name__}: {e}")
     except Exception as e:
         print(f"[POST test CMA] ERR {type(e).__name__}: {e}")
-    _dump("LEGINFO lawjs NVLWJ22P", "http://public.leginfo.state.ny.us/STATDOC/NVLWJ22P.js",
-          [r'QLAWDATA=\*\*([A-Z0-9]+)', r'getlaw([A-Z0-9]+)'], timeout=60)
     print("=== DIAG 끝 (로그로 무키 경로·열거·섹션 구조 판정) ===")
 
 
