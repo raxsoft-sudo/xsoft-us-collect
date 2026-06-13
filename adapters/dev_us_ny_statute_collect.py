@@ -28,6 +28,7 @@ import ssl
 import json
 import urllib.request
 import urllib.error
+import urllib.parse
 
 API_BASE = "https://legislation.nysenate.gov/api/3"
 HTML_BASE = "https://www.nysenate.gov/legislation/laws"
@@ -318,6 +319,29 @@ def diag():
     _dump("LEGINFO csvarray", "http://public.leginfo.state.ny.us/STATDOC/CSVARRAY.js", [r'"([A-Z]{2,4})"', r"'([A-Z]{2,4})'"], timeout=60)
     _dump("LEGINFO navjs", "http://public.leginfo.state.ny.us/statdoc/NVMUJ04P.js", timeout=60)
     _dump("LEGINFO lawssrch http", "http://public.leginfo.state.ny.us/lawssrch.cgi", timeout=60)
+    # 4) ★ 결정적 시험 = 사이트 JS(getlawCMA) 그대로 POST → 법령 본문 회수 여부 (쿠키 세션 포함)
+    try:
+        import http.cookiejar
+        cj = http.cookiejar.CookieJar()
+        opener = urllib.request.build_opener(
+            urllib.request.HTTPCookieProcessor(cj),
+            urllib.request.HTTPSHandler(context=CTX),
+        )
+        opener.addheaders = list(BROWSER_HEADERS.items())
+        # 세션 establish
+        opener.open("http://public.leginfo.state.ny.us/navigate.cgi", timeout=60).read()
+        print(f"[POST test] 쿠키수={len(cj)}")
+        action = "http://public.leginfo.state.ny.us/lawssrch.cgi?NVLWO:+&QLAWDATA=**CMA+&SEATYPE=AQUA+&LIST=LAW"
+        data = urllib.parse.urlencode({"hwebpage": "LAWS"}).encode()
+        r = opener.open(urllib.request.Request(action, data=data), timeout=60)
+        rb = r.read()
+        rtext = rb.decode("utf-8", "ignore")
+        print(f"[POST test CMA] status={r.getcode()} body_len={len(rb)}")
+        print(f"[POST test CMA] head1500={rtext[:1500]!r}")
+        ahrefs = re.findall(r'href=["\']([^"\']+)["\']', rtext, re.IGNORECASE)
+        print(f"[POST test CMA] href수={len(ahrefs)} 샘플30={ahrefs[:30]}")
+    except Exception as e:
+        print(f"[POST test CMA] ERR {type(e).__name__}: {e}")
     print("=== DIAG 끝 (로그로 무키 경로·열거·섹션 구조 판정) ===")
 
 
