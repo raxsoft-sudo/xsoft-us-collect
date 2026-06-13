@@ -48,7 +48,7 @@ LEGINFO_BASE = "https://public.leginfo.state.ny.us"  # 2순위 무키 LRS (lawss
 
 # 열거원 = 공개 정본 (위키피디아 + Lumen Appendix B) → leginfo 교차검증 (사용자 처방 2026-06-13)
 WIKI_URL = "https://en.wikipedia.org/wiki/Consolidated_Laws_of_New_York"
-LUMEN_URL = "https://courses.lumenlearning.com/suny-newyorkcitygovernment/chapter/appendix-b-the-laws-of-new-york/"
+LUMEN_URL = "https://courses.lumenlearning.com/suny-monroe-law101/chapter/appendix-b-new-york-consolidated-unconsolidated-law-index/"
 # 유효 법령 본문 최소 바이트 (leginfo 나브셸 6~7KB 초과 · diag 통제군으로 보정)
 LEGINFO_MIN = int(os.environ.get("NY_LEGINFO_MIN", "15000"))
 
@@ -143,9 +143,13 @@ def fetch_lawid_candidates():
             p1 = re.findall(r'\(([A-Z]{2,4})\)', text)          # 괄호 약어 (BNK)
             p2 = re.findall(r'/laws/([A-Z]{2,4})\b', text)       # nysenate lawID 링크
             p3 = re.findall(r'>\s*([A-Z]{2,4})\s*<', text)       # 표 셀 단독 대문자 토큰
-            for t in p1 + p2 + p3:
+            # Lumen Appendix B = "CODE - 법령명" / "CODE – 법령명" 인덱스 행
+            p4 = re.findall(r'\b([A-Z]{2,4})\s*[-–—:]\s*[A-Z][a-z]', text)
+            # 표 셀 직후 대문자 코드 (td>CODE</td><td>Name)
+            p5 = re.findall(r'<td[^>]*>\s*([A-Z]{2,4})\s*</td>', text)
+            for t in p1 + p2 + p3 + p4 + p5:
                 cands.add(t.upper())
-            print(f"[cand {label}] 괄호={len(set(p1))} 링크={len(set(p2))} 셀={len(set(p3))}")
+            print(f"[cand {label}] 괄호={len(set(p1))} 링크={len(set(p2))} 셀={len(set(p3))} 인덱스행={len(set(p4))} td={len(set(p5))}")
         except Exception as e:
             print(f"[cand {label}] ERR {type(e).__name__}: {e}")
     return sorted(cands)
@@ -168,6 +172,16 @@ def probe_wiki_structure():
         print(f"[wikiprobe] /wiki/*_Law 링크 수={len(set(wl))} 샘플30={sorted(set(wl))[:30]}")
     except Exception as e:
         print(f"[wikiprobe] ERR {type(e).__name__}: {e}")
+    # Lumen Appendix B 구조 = 코드 인덱스 마크업 규명
+    try:
+        code, body = http_get(LUMEN_URL, timeout=60, headers=BROWSER_HEADERS)
+        text = body.decode("utf-8", "ignore")
+        print(f"[lumenprobe] status={code} body_len={len(body)}")
+        for anchor in ["ABP", "Banking", "BNK", "Abandoned"]:
+            idx = text.find(anchor)
+            print(f"[lumenprobe '{anchor}'] idx={idx} 주변={text[max(0,idx-80):idx+200]!r}")
+    except Exception as e:
+        print(f"[lumenprobe] ERR {type(e).__name__}: {e}")
 
 
 def api_available():
