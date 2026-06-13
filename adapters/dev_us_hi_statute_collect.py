@@ -18,7 +18,8 @@ CONFIG = {
     "state": "hi",
     "base": "https://data.capitol.hawaii.gov",
     "index_url": "https://data.capitol.hawaii.gov/sessions/session2017/HRS-Chapter-PDF's/",
-    "link_re": re.compile(r'href=["\']([^"\']*HRS_\d+[^"\']*\.pdf)["\']', re.IGNORECASE),
+    # 디렉토리 경로에 아포스트로피(HRS-Chapter-PDF's) 포함 → 큰따옴표 전용 캡처(작은따옴표 허용).
+    "link_re": re.compile(r'href="([^"]*HRS_\d+[^"]*\.pdf)"', re.IGNORECASE),
     "ext": ".pdf",
 }
 
