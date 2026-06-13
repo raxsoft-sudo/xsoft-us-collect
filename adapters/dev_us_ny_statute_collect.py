@@ -43,6 +43,7 @@ CTX.check_hostname = False
 CTX.verify_mode = ssl.CERT_NONE
 
 LAW_ID_RE = re.compile(r'/legislation/laws/([A-Z0-9]+)', re.IGNORECASE)
+LEGINFO_BASE = "https://public.leginfo.state.ny.us"  # 2순위 무키 LRS (lawssrch.cgi)
 
 
 def http_get(url, timeout=30):
@@ -269,10 +270,53 @@ def verify():
     print(f"판정 = {'PASS' if ok else 'FAIL'}")
 
 
+def _dump(label, url, extra_res=None):
+    """무키 경로 진단용 = status·body_len·head·href 덤프 (한 번에 구조 파악)."""
+    try:
+        code, body = http_get(url)
+        text = body.decode("utf-8", "ignore")
+        print(f"[{label}] {url} status={code} body_len={len(body)}")
+        print(f"[{label}] head1200={text[:1200]!r}")
+        hrefs = re.findall(r'href=["\']([^"\']+)["\']', text, re.IGNORECASE)
+        print(f"[{label}] href수={len(hrefs)} 샘플30={hrefs[:30]}")
+        forms = re.findall(r'<form[^>]*action=["\']([^"\']+)["\'][^>]*>', text, re.IGNORECASE)
+        print(f"[{label}] form action={forms[:6]}")
+        if extra_res:
+            for pat in extra_res:
+                hits = re.findall(pat, text, re.IGNORECASE)
+                print(f"[{label}] re({pat})={len(hits)} 샘플10={hits[:10]}")
+    except Exception as e:
+        print(f"[{label}] ERR {type(e).__name__}: {e}")
+
+
+def diag():
+    """무키 NY 경로 종합 진단 = API 무키코드 + leginfo LRS 구조 + nysenate HTML (추정 발진 금지·실데이터 확인)."""
+    print("=== NY 법전 DIAG (무키 경로 규명) ===")
+    print(f"[API_KEY] 존재={'Y' if API_KEY else 'N'}")
+    # 1) API 무키 호출 = 401이면 키 필수 / 200이면 무키 가능
+    try:
+        code, body = http_get(f"{API_BASE}/laws?limit=1")
+        print(f"[API nokey] status={code} body_len={len(body)} head300={body[:300]!r}")
+    except urllib.error.HTTPError as e:
+        print(f"[API nokey] HTTPError {e.code} = {'키필수' if e.code in (401,403) else e.reason}")
+    except Exception as e:
+        print(f"[API nokey] ERR {type(e).__name__}: {e}")
+    # 2) leginfo LRS (2순위 무키)
+    _dump("LEGINFO lawssrch", f"{LEGINFO_BASE}/lawssrch.cgi")
+    _dump("LEGINFO navigate", f"{LEGINFO_BASE}/navigate.cgi")
+    _dump("LEGINFO menugetf", f"{LEGINFO_BASE}/menugetf.cgi?COMMONQUERY=LAWS")
+    # 3) nysenate HTML 목록 + 샘플 법령(ABP=유기농산물?·BNK=은행법 등 실제 페이지 구조)
+    _dump("NYSENATE list", "https://www.nysenate.gov/legislation/laws", [r'/legislation/laws/([A-Z0-9]{2,4})'])
+    _dump("NYSENATE law BNK", "https://www.nysenate.gov/legislation/laws/BNK")
+    print("=== DIAG 끝 (로그로 무키 경로·열거·섹션 구조 판정) ===")
+
+
 if __name__ == "__main__":
     mode = sys.argv[1] if len(sys.argv) > 1 else "--probe"
     if mode == "--probe":
         probe()
+    elif mode == "--diag":
+        diag()
     elif mode == "--enum":
         enum()
     elif mode == "--collect":
