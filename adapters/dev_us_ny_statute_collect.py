@@ -116,7 +116,7 @@ def make_leginfo_opener():
     return opener
 
 
-def leginfo_post(opener, law_id, timeout=60):
+def leginfo_post(opener, law_id, timeout=25):
     """lawID 단건 POST → (status, body_bytes). QLAWDATA=**<lawID> 전문 회수."""
     action = f"http://public.leginfo.state.ny.us/lawssrch.cgi?NVLWO:+&QLAWDATA=**{law_id}+&SEATYPE=AQUA+&LIST=LAW"
     data = urllib.parse.urlencode({"hwebpage": "LAWS"}).encode()
@@ -141,13 +141,14 @@ def fetch_lawid_candidates():
             code, body = http_get(url, timeout=60, headers=BROWSER_HEADERS)
             text = html.unescape(body.decode("utf-8", "ignore"))  # &#8211; → – 등 엔티티 복원
             print(f"[cand {label}] status={code} body_len={len(body)}")
-            p1 = re.findall(r'\(([A-Z]{2,4})\)', text)          # 괄호 약어 (BNK)
+            # 위키 = 법령명만(코드 없음) → /laws 링크만. Lumen = "CODE – 법령명" 인덱스 행이 코드 정본.
+            # 괄호 약어(\(ABC\))는 CLS·ISBN·OCLC 인용 노이즈라 폐기(측정:직전 diag 인용 cruft 검출).
             p2 = re.findall(r'/laws/([A-Z]{2,4})\b', text)       # nysenate lawID 링크
-            # Lumen Appendix B = "CODE – 법령명" 인덱스 행 (엔티티 복원 후 대시·콜론)
-            p4 = re.findall(r'>\s*([A-Z]{2,4})\s*[\-–—:]\s*[A-Z]', text)
-            for t in p1 + p2 + p4:
+            p4 = re.findall(r'>\s*([A-Z]{2,4})\s*[\-–—:]\s*[A-Z]', text)  # Lumen Appendix B 인덱스 행
+            picked = (p2 + p4) if label == "lumen" else p2
+            for t in picked:
                 cands.add(t.upper())
-            print(f"[cand {label}] 괄호={len(set(p1))} 링크={len(set(p2))} 인덱스행={len(set(p4))}")
+            print(f"[cand {label}] 링크={len(set(p2))} 인덱스행={len(set(p4))} 채택={len(set(picked))}")
         except Exception as e:
             print(f"[cand {label}] ERR {type(e).__name__}: {e}")
     return sorted(cands)
