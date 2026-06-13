@@ -151,6 +151,25 @@ def fetch_lawid_candidates():
     return sorted(cands)
 
 
+def probe_wiki_structure():
+    """위키 HTML에서 lawID 약어가 박힌 실제 마크업 규명 (앵커 주변 덤프·추정 발진 금지)."""
+    try:
+        code, body = http_get(WIKI_URL, timeout=60, headers=BROWSER_HEADERS)
+        text = body.decode("utf-8", "ignore")
+        print(f"[wikiprobe] status={code} body_len={len(body)}")
+        for anchor in ["Banking", "Penal", "Vehicle and Traffic", "Abandoned Property"]:
+            idx = text.find(anchor)
+            print(f"[wikiprobe '{anchor}'] idx={idx} 주변={text[max(0,idx-120):idx+220]!r}")
+        # 위키링크 title 후보 = 'XXX Law' 형 법령명 추출
+        titles = re.findall(r'title="([A-Z][A-Za-z,&;\s]+?Law)(?:\s*\([^)]*\))?"', text)
+        print(f"[wikiprobe] title='..Law' 수={len(set(titles))} 샘플30={sorted(set(titles))[:30]}")
+        # /wiki/ 링크 중 'Law' 포함
+        wl = re.findall(r'/wiki/([A-Za-z0-9_()]+?_Law[A-Za-z0-9_()]*)', text)
+        print(f"[wikiprobe] /wiki/*_Law 링크 수={len(set(wl))} 샘플30={sorted(set(wl))[:30]}")
+    except Exception as e:
+        print(f"[wikiprobe] ERR {type(e).__name__}: {e}")
+
+
 def api_available():
     """API 키 존재 + 응답 200 확인."""
     if not API_KEY:
@@ -336,6 +355,7 @@ def verify():
 def enumsrc():
     """열거원 발견 = 위키/Lumen 후보 추출 + leginfo 교차검증 (diag 선행·임계값 데이터 도출)."""
     print("=== NY ENUMSRC DIAG (위키/Lumen 열거원 + leginfo 교차검증) ===")
+    probe_wiki_structure()
     cands = fetch_lawid_candidates()
     print(f"[cand] distinct 후보 총={len(cands)} 샘플80={cands[:80]}")
     opener = make_leginfo_opener()
