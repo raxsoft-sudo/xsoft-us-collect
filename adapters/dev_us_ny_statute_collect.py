@@ -314,9 +314,10 @@ def diag():
     # 2) leginfo LRS (2순위 무키) = http + 긴 타임아웃(서버 느림 대응)
     _dump("LEGINFO http menugetf", "http://public.leginfo.state.ny.us/menugetf.cgi?COMMONQUERY=LAWS", timeout=60)
     _dump("LEGINFO http navigate", "http://public.leginfo.state.ny.us/navigate.cgi", timeout=60)
-    # 3) nysenate HTML = 완전 브라우저 헤더로 403 재판정 (헤더차단 vs IP대역차단 구분)
-    _dump("NYSENATE list", "https://www.nysenate.gov/legislation/laws", [r'/legislation/laws/([A-Z0-9]{2,4})'])
-    _dump("NYSENATE law BNK", "https://www.nysenate.gov/legislation/laws/BNK")
+    # 3) leginfo 메뉴 JS 자산 = 법령 목록·네비 명령 구조 규명 (CSVARRAY = 법령배열 추정)
+    _dump("LEGINFO csvarray", "http://public.leginfo.state.ny.us/STATDOC/CSVARRAY.js", [r'"([A-Z]{2,4})"', r"'([A-Z]{2,4})'"], timeout=60)
+    _dump("LEGINFO navjs", "http://public.leginfo.state.ny.us/statdoc/NVMUJ04P.js", timeout=60)
+    _dump("LEGINFO lawssrch http", "http://public.leginfo.state.ny.us/lawssrch.cgi", timeout=60)
     print("=== DIAG 끝 (로그로 무키 경로·열거·섹션 구조 판정) ===")
 
 
