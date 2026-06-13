@@ -337,11 +337,22 @@ def diag():
         rb = r.read()
         rtext = rb.decode("utf-8", "ignore")
         print(f"[POST test CMA] status={r.getcode()} body_len={len(rb)}")
-        print(f"[POST test CMA] head1500={rtext[:1500]!r}")
-        ahrefs = re.findall(r'href=["\']([^"\']+)["\']', rtext, re.IGNORECASE)
-        print(f"[POST test CMA] href수={len(ahrefs)} 샘플30={ahrefs[:30]}")
+        # ★ 열거원 추출 = 응답 메뉴에 박힌 전체 법령 LAWID·SEATYPE
+        qlaw = sorted(set(re.findall(r'QLAWDATA=\*\*([A-Z0-9]+)', rtext)))
+        seat = sorted(set(re.findall(r'SEATYPE=([A-Z0-9]+)', rtext)))
+        getl = sorted(set(re.findall(r'getlaw([A-Z0-9]+)\s*\(', rtext)))
+        pairs = sorted(set(re.findall(r'QLAWDATA=\*\*([A-Z0-9]+)\+&SEATYPE=([A-Z0-9]+)', rtext)))
+        print(f"[POST test CMA] QLAWDATA distinct={len(qlaw)} 샘플40={qlaw[:40]}")
+        print(f"[POST test CMA] SEATYPE distinct={len(seat)} = {seat}")
+        print(f"[POST test CMA] getlaw fn={len(getl)} 샘플40={getl[:40]}")
+        print(f"[POST test CMA] (LAWID,SEATYPE)쌍={len(pairs)} 샘플20={pairs[:20]}")
+        # 본문 단위 추출 가능성 = 섹션 마커
+        secs = re.findall(r'(?:&sect;|SECTION|§)\s*([0-9]+[0-9a-z\-\.]*)', rtext)
+        print(f"[POST test CMA] 섹션마커 추정={len(secs)} 샘플10={secs[:10]}")
     except Exception as e:
         print(f"[POST test CMA] ERR {type(e).__name__}: {e}")
+    _dump("LEGINFO lawjs NVLWJ22P", "http://public.leginfo.state.ny.us/STATDOC/NVLWJ22P.js",
+          [r'QLAWDATA=\*\*([A-Z0-9]+)', r'getlaw([A-Z0-9]+)'], timeout=60)
     print("=== DIAG 끝 (로그로 무키 경로·열거·섹션 구조 판정) ===")
 
 
