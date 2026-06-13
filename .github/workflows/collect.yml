@@ -12,7 +12,7 @@ on:
         required: false
         default: '0'
       mode:
-        description: 'collect=전수집 / diag=인덱스 href 구조만 덤프'
+        description: 'collect=전수집 / diag=인덱스 href 구조 / netcap=SPA XHR API 캡처'
         required: false
         default: 'collect'
 
@@ -34,11 +34,25 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Install Playwright (SPA 주 전용)
+        if: inputs.mode == 'diag' || inputs.mode == 'netcap'
+        run: |
+          pip install playwright || true
+          python -m playwright install --with-deps chromium || true
+
       - name: Run diag
         if: inputs.mode == 'diag'
         run: |
           export RAW_DIR="${GITHUB_WORKSPACE}/out/us-${{ matrix.state }}/statute"
           python adapters/dev_us_${{ matrix.state }}_statute_collect.py --diag
+        env:
+          NY_OPENLEG_KEY: ${{ secrets.NY_OPENLEG_KEY }}
+
+      - name: Run netcap (SPA XHR API 캡처)
+        if: inputs.mode == 'netcap'
+        run: |
+          export RAW_DIR="${GITHUB_WORKSPACE}/out/us-${{ matrix.state }}/statute"
+          python adapters/dev_us_${{ matrix.state }}_statute_collect.py --netcap
         env:
           NY_OPENLEG_KEY: ${{ secrets.NY_OPENLEG_KEY }}
 
