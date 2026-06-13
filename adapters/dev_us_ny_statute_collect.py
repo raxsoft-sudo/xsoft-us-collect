@@ -46,6 +46,12 @@ CTX.verify_mode = ssl.CERT_NONE
 LAW_ID_RE = re.compile(r'/legislation/laws/([A-Z0-9]+)', re.IGNORECASE)
 LEGINFO_BASE = "https://public.leginfo.state.ny.us"  # 2순위 무키 LRS (lawssrch.cgi)
 
+# 열거원 = 공개 정본 (위키피디아 + Lumen Appendix B) → leginfo 교차검증 (사용자 처방 2026-06-13)
+WIKI_URL = "https://en.wikipedia.org/wiki/Consolidated_Laws_of_New_York"
+LUMEN_URL = "https://courses.lumenlearning.com/suny-newyorkcitygovernment/chapter/appendix-b-the-laws-of-new-york/"
+# 유효 법령 본문 최소 바이트 (leginfo 나브셸 6~7KB 초과 · diag 통제군으로 보정)
+LEGINFO_MIN = int(os.environ.get("NY_LEGINFO_MIN", "15000"))
+
 
 BROWSER_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
@@ -91,6 +97,58 @@ def fetch_to_file_retry(url, path, backoff=2.0, max_retry=5):
             time.sleep(wait)
             wait *= 2
     return False
+
+
+def make_leginfo_opener():
+    """leginfo 세션 = 쿠키자 + 브라우저 헤더 (5.2 입증 경로)."""
+    import http.cookiejar
+    cj = http.cookiejar.CookieJar()
+    opener = urllib.request.build_opener(
+        urllib.request.HTTPCookieProcessor(cj),
+        urllib.request.HTTPSHandler(context=CTX),
+    )
+    opener.addheaders = list(BROWSER_HEADERS.items())
+    try:
+        opener.open("http://public.leginfo.state.ny.us/navigate.cgi", timeout=60).read()
+    except Exception as e:
+        print(f"[leginfo session] WARN {type(e).__name__}: {e}")
+    return opener
+
+
+def leginfo_post(opener, law_id, timeout=60):
+    """lawID 단건 POST → (status, body_bytes). QLAWDATA=**<lawID> 전문 회수."""
+    action = f"http://public.leginfo.state.ny.us/lawssrch.cgi?NVLWO:+&QLAWDATA=**{law_id}+&SEATYPE=AQUA+&LIST=LAW"
+    data = urllib.parse.urlencode({"hwebpage": "LAWS"}).encode()
+    r = opener.open(urllib.request.Request(action, data=data), timeout=timeout)
+    return r.getcode(), r.read()
+
+
+def leginfo_valid(opener, law_id):
+    """교차검증 게이트 = 200 + 본문>=LEGINFO_MIN → (bool, body_len). 미검증 약어 발진 금지."""
+    try:
+        code, body = leginfo_post(opener, law_id)
+        return (code == 200 and len(body) >= LEGINFO_MIN), len(body)
+    except Exception:
+        return False, 0
+
+
+def fetch_lawid_candidates():
+    """위키피디아 + Lumen Appendix B 공개 목록에서 lawID 약어 후보 추출 (공개 사실·교차검증 전 단계)."""
+    cands = set()
+    for label, url in [("wiki", WIKI_URL), ("lumen", LUMEN_URL)]:
+        try:
+            code, body = http_get(url, timeout=60, headers=BROWSER_HEADERS)
+            text = body.decode("utf-8", "ignore")
+            print(f"[cand {label}] status={code} body_len={len(body)}")
+            p1 = re.findall(r'\(([A-Z]{2,4})\)', text)          # 괄호 약어 (BNK)
+            p2 = re.findall(r'/laws/([A-Z]{2,4})\b', text)       # nysenate lawID 링크
+            p3 = re.findall(r'>\s*([A-Z]{2,4})\s*<', text)       # 표 셀 단독 대문자 토큰
+            for t in p1 + p2 + p3:
+                cands.add(t.upper())
+            print(f"[cand {label}] 괄호={len(set(p1))} 링크={len(set(p2))} 셀={len(set(p3))}")
+        except Exception as e:
+            print(f"[cand {label}] ERR {type(e).__name__}: {e}")
+    return sorted(cands)
 
 
 def api_available():
@@ -186,72 +244,66 @@ def probe():
 
 
 def enum():
-    """API 또는 HTML → lawId 열거 → _enum_laws.txt."""
+    """열거원 = 위키/Lumen 공개 후보 → leginfo 교차검증(200·본문>=LEGINFO_MIN) → _enum_laws.txt."""
     os.makedirs(RAW_DIR, exist_ok=True)
-    if api_available():
-        print("[enum] API 경로 사용")
-        law_ids = get_law_ids_api()
-    else:
-        print("[enum] HTML 폴백 경로 사용")
-        law_ids = get_law_ids_html()
-
-    if not law_ids:
-        print("[ERR] lawId 열거 실패 — NY_BLOCKED 가능")
+    cands = fetch_lawid_candidates()
+    print(f"[enum] 공개 후보 distinct={len(cands)}")
+    if not cands:
+        print("[ERR] 후보 0 — 위키/Lumen 파싱 실패")
         sys.exit(1)
-
-    if SMOKE > 0:
-        law_ids = law_ids[:SMOKE]
+    opener = make_leginfo_opener()
+    validated = []
+    for lid in cands:
+        ok, blen = leginfo_valid(opener, lid)
+        if ok:
+            validated.append(lid)
+            print(f"  [OK] {lid} body_len={blen}")
+        time.sleep(DELAY)
+        if SMOKE > 0 and len(validated) >= SMOKE:
+            break
+    validated = sorted(set(validated))
+    if not validated:
+        print("[ERR] 검증 통과 lawID 0 — 후보/임계값(LEGINFO_MIN) 점검 필요")
+        sys.exit(1)
     with open(ENUM_FILE, "w") as f:
-        for lid in law_ids:
+        for lid in validated:
             f.write(lid + "\n")
-    print(f"[OK] 열거 정본 저장: {ENUM_FILE} ({len(law_ids)}건)")
+    print(f"[OK] 열거 정본(검증완료) 저장: {ENUM_FILE} ({len(validated)}건) = {validated}")
 
 
 def collect():
-    """_enum_laws.txt lawId 순회 → JSON(API) 또는 HTML(폴백) 저장."""
+    """_enum_laws.txt lawID 순회 → leginfo POST 전문 회수 → HTML 저장 (비주석 정본)."""
     if not os.path.exists(ENUM_FILE):
         print(f"열거 정본 없음: {ENUM_FILE} (먼저 --enum)")
         sys.exit(1)
     with open(ENUM_FILE) as f:
         ids = [ln.strip() for ln in f if ln.strip()]
     os.makedirs(RAW_DIR, exist_ok=True)
-    use_api = api_available()
+    opener = make_leginfo_opener()
     ok = miss = skip = 0
     for i, law_id in enumerate(ids, 1):
-        if use_api:
-            url = f"{API_BASE}/laws/{law_id}?full=true&key={API_KEY}"
-            path = os.path.join(RAW_DIR, f"{law_id}.json")
-        else:
-            url = f"{HTML_BASE}/{law_id}"
-            path = os.path.join(RAW_DIR, f"{law_id}.html")
-
+        path = os.path.join(RAW_DIR, f"{law_id}.html")
         if os.path.exists(path) and os.path.getsize(path) > 0:
             skip += 1
             continue
-
-        result = fetch_to_file_retry(url, path)
-        if result is None:
-            # 인증 실패 → HTML 폴백
-            use_api = False
-            url2 = f"{HTML_BASE}/{law_id}"
-            path2 = os.path.join(RAW_DIR, f"{law_id}.html")
-            if fetch_to_file_retry(url2, path2):
+        try:
+            code, body = leginfo_post(opener, law_id)
+            if code == 200 and len(body) >= LEGINFO_MIN:
+                with open(path, "wb") as f:
+                    f.write(body)
                 ok += 1
             else:
-                print("NY_BLOCKED: API 인증 실패 + HTML 접근 불가")
+                print(f"  [miss] {law_id} status={code} body_len={len(body)}")
                 miss += 1
-        elif result:
-            ok += 1
-        else:
+        except Exception as e:
+            print(f"  [miss] {law_id} ERR {type(e).__name__}: {e}")
             miss += 1
-
-        if i % 50 == 0:
+        if i % 20 == 0:
             print(f"  진행 {i}/{len(ids)} ok={ok} skip={skip} miss={miss}", flush=True)
         time.sleep(DELAY)
-
     print(f"[collect] 총={len(ids)} ok={ok} skip={skip} miss={miss}")
     if ok == 0 and miss > 0:
-        print("NY_BLOCKED: 모든 요청 실패")
+        print("NY_BLOCKED: leginfo 전부 실패")
         sys.exit(1)
 
 
@@ -279,6 +331,30 @@ def verify():
     print(f"식별자 중복 = {dup}")
     ok = rate < 1.0 and len(orphan) == 0 and dup == 0
     print(f"판정 = {'PASS' if ok else 'FAIL'}")
+
+
+def enumsrc():
+    """열거원 발견 = 위키/Lumen 후보 추출 + leginfo 교차검증 (diag 선행·임계값 데이터 도출)."""
+    print("=== NY ENUMSRC DIAG (위키/Lumen 열거원 + leginfo 교차검증) ===")
+    cands = fetch_lawid_candidates()
+    print(f"[cand] distinct 후보 총={len(cands)} 샘플80={cands[:80]}")
+    opener = make_leginfo_opener()
+    print("--- 통제군 (유효/무효 body_len → LEGINFO_MIN 임계값 도출) ---")
+    for lid in ["CMA", "BNK", "PEN", "EDN", "ABP", "VAT", "GBS", "ZZQ", "QXZ"]:
+        ok, blen = leginfo_valid(opener, lid)
+        print(f"  [ctrl] {lid:4s} valid={ok} body_len={blen}")
+        time.sleep(DELAY)
+    print(f"--- 전체 후보 교차검증 (200·본문>=LEGINFO_MIN={LEGINFO_MIN}) ---")
+    passed = []
+    for lid in cands:
+        ok, blen = leginfo_valid(opener, lid)
+        if ok:
+            passed.append(lid)
+        if blen > 0:
+            print(f"  [val] {lid:4s} valid={ok} body_len={blen}")
+        time.sleep(DELAY)
+    print(f"[ENUMSRC] 통과 lawID={len(passed)} = {sorted(passed)}")
+    print("=== ENUMSRC 끝 ===")
 
 
 def _dump(label, url, extra_res=None, timeout=30):
@@ -410,6 +486,10 @@ if __name__ == "__main__":
     if mode == "--probe":
         probe()
     elif mode == "--diag":
+        enumsrc()
+    elif mode == "--enumsrc":
+        enumsrc()
+    elif mode == "--diag-old":
         diag()
     elif mode == "--enum":
         enum()
