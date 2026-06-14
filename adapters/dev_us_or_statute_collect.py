@@ -13,6 +13,7 @@
 import os
 import sys
 import time
+import urllib.error
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _us_html_statute_core as core  # noqa: E402
@@ -61,6 +62,8 @@ def or_enum(cfg):
                     found.append(url)
                     ok = True
                 break
+            except urllib.error.HTTPError:
+                break  # 404 등 = 결손 챕터 확정(재시도 불요)
             except Exception:
                 time.sleep(1.5 * (attempt + 1))
         if not ok:
