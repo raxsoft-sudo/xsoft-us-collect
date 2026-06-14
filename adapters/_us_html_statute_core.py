@@ -96,7 +96,7 @@ def fetch_to_file_retry(url, path, backoff=2.0, max_retry=5):
         try:
             req = urllib.request.Request(_safe_url(url), headers=HEADERS)
             with urllib.request.urlopen(req, timeout=120, context=CTX) as r:
-                if r.getcode() != 200:
+                if not (200 <= r.getcode() < 300):
                     print(f"[MISS status={r.getcode()}] {url[:120]}", flush=True)
                     return False
                 tmp = path + ".part"
@@ -252,8 +252,8 @@ def diag(cfg):
 def _enum_urls(cfg):
     base, index_url = cfg["base"], cfg["index_url"]
     code, body = http_get(index_url)
-    if code != 200:
-        print(f"[ERR] 인덱스 비200: {code}")
+    if not (200 <= code < 300):
+        print(f"[ERR] 인덱스 비2xx: {code}")
         sys.exit(1)
     print(f"[DIAG index] {index_url} status={code} body_len={len(body)}")
     # 1단계: 챕터 트리가 있으면 챕터별 섹션 수집
@@ -265,7 +265,7 @@ def _enum_urls(cfg):
         for ci, ch in enumerate(chapters, 1):
             try:
                 c2, b2 = http_get(ch)
-                if c2 == 200:
+                if 200 <= c2 < 300:
                     for s in _links(base, ch, b2, cfg.get("link_re", DEFAULT_LINK_RE)):
                         if s not in seen:
                             seen.add(s)
