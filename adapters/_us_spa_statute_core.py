@@ -261,7 +261,12 @@ def netcap(cfg):
         try:
             rt = resp.request.resource_type
             if rt in ("xhr", "fetch"):
-                caps.append((resp.status, rt, resp.headers.get("content-type", ""), resp.url))
+                # post_data = POST 바디 관찰(graphql 등 쿼리 바디가 열거 정본인 경우·추정 아님)
+                try:
+                    pd = resp.request.post_data
+                except Exception:
+                    pd = None
+                caps.append((resp.status, rt, resp.headers.get("content-type", ""), resp.url, pd))
         except Exception:
             pass
 
@@ -283,18 +288,21 @@ def netcap(cfg):
         sys.exit(1)
 
     seen, rows = set(), []
-    for status, rt, ct, url in caps:
-        if url in seen:
+    for status, rt, ct, url, pd in caps:
+        key = (url, pd)
+        if key in seen:
             continue
-        seen.add(url)
-        rows.append((status, rt, ct, url))
+        seen.add(key)
+        rows.append((status, rt, ct, url, pd))
     data_rows = [r for r in rows if any(k in r[2].lower() for k in ("json", "xml"))]
     print(f"[NETCAP] XHR/fetch distinct 응답 {len(rows)}건 (json/xml {len(data_rows)}건)")
     print("[NETCAP data 후보(json/xml)] =====")
-    for status, rt, ct, url in data_rows:
+    for status, rt, ct, url, pd in data_rows:
         print(f"  [{status} {rt} {ct}] {url[:220]}")
+        if pd:
+            print(f"    [POST body] {pd[:600]}")
     print("[NETCAP 전체 XHR/fetch] =====")
-    for status, rt, ct, url in rows:
+    for status, rt, ct, url, pd in rows:
         print(f"  [{status} {rt} {ct}] {url[:220]}")
     if not rows:
         print("[NETCAP] 초기 로드 XHR/fetch 0건 = 클릭/상호작용 유발 필요(추정 클릭 금지·재보고)")
@@ -303,7 +311,7 @@ def netcap(cfg):
     if api_re:
         raw, enum_file = _paths(cfg)
         os.makedirs(raw, exist_ok=True)
-        api_urls = [u for (_, _, _, u) in rows if api_re.search(u)]
+        api_urls = [u for (_, _, _, u, _) in rows if api_re.search(u)]
         # enum_sub = (정규식, 치환) = 관찰된 목록 URL을 측정으로 확인된 전문 URL 패턴으로 변환.
         #   예: in = 목차 .json 36건 enum → 확인된 .html(전문) 36건으로 치환(추정 아님·둘 다 측정).
         sub = cfg.get("enum_sub")
