@@ -12,18 +12,16 @@
       "타임아웃 빈번·저속 크롤" 경고 일치). collect 시 긴 timeout·저병렬 필요.
 
 남은 장벽 = Part→Title→Chapter 열거. Part 인덱스가 CSR라 정적 파싱 불가.
-다음 단계 (별도 세션) = 둘 중 하나 :
-  A. 본 어댑터를 _us_spa_statute_core 로 전환 → --netcap 으로 Title/Chapter 트리
-     API(XHR) 발굴 → apicollect 열거 (collect_spa.yml).
-  B. 권위 있는 Part/Title/Chapter 목록 확보(리서치 = Part I~V 확정) → Chapter URL 생성
-     → 정적 Chapter 페이지에서 Section 링크 수집(2단 코어 그대로).
+★ 단계 A 착수 (2026-06-14 standing 8주) = SPA 코어 전환 → --netcap 으로 Title/Chapter 트리
+  API(XHR/fetch) 발굴 (IN 동형·관찰 정본·추정 금지·계명1). 발굴 결과로 chapter_re/api_re 보정.
+  XHR 트리 부재 시 = 경로 B(권위 Part/Title 목록 → 정적 Chapter Section 수집)로 재판단.
 라이선스 = 퍼블릭도메인(government edicts). 주석·notes 비혼입. 로컬 금지(지오블록)."""
 import re
 import sys
 import os
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from _us_html_statute_core import run  # noqa: E402
+from _us_spa_statute_core import run  # noqa: E402
 
 CONFIG = {
     "state": "ma",
