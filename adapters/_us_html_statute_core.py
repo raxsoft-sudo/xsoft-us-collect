@@ -261,19 +261,32 @@ def _enum_urls(cfg):
         chapters = _links(base, index_url, body, cfg["chapter_re"])
         if not chapters:
             _fatal_zero("챕터", index_url, body)
+        # 청크 분할은 '타이틀(챕터)' 축에서 수행 = 결정적 분할(섹션 모듈로 아님).
+        # 인덱스의 타이틀 목록은 안정적이라 잡마다 동일 → idx%CHUNK_N 분할이
+        # 서로소 완전분할. 각 잡은 자기 타이틀만 열거 → 합집합=전수 + 8중 enum 제거.
+        chapters = _chunk_slice(chapters, cfg["state"] + "-title")
         out, seen = [], set()
         for ci, ch in enumerate(chapters, 1):
-            try:
-                c2, b2 = http_get(ch)
-                if 200 <= c2 < 300:
-                    for s in _links(base, ch, b2, cfg.get("link_re", DEFAULT_LINK_RE)):
-                        if s not in seen:
-                            seen.add(s)
-                            out.append(s)
-                if ci % 20 == 0:
-                    print(f"  챕터 {ci}/{len(chapters)} 누적={len(out)}", flush=True)
-            except Exception as e:
-                print(f"[ch {ci}] ERR {type(e).__name__}: {e}")
+            b2 = None
+            for attempt in range(4):
+                try:
+                    c2, b2 = http_get(ch)
+                    if 200 <= c2 < 300:
+                        break
+                    print(f"[ch {ci}] status={c2} 재시도{attempt+1}")
+                except Exception as e:
+                    print(f"[ch {ci}] ERR {type(e).__name__}: {e} 재시도{attempt+1}")
+                b2 = None
+                time.sleep(2.0 * (attempt + 1))
+            if b2:
+                for s in _links(base, ch, b2, cfg.get("link_re", DEFAULT_LINK_RE)):
+                    if s not in seen:
+                        seen.add(s)
+                        out.append(s)
+            else:
+                print(f"[ch {ci}] 최종 실패(타이틀 누락 가능): {ch[:120]}")
+            if ci % 20 == 0:
+                print(f"  챕터 {ci}/{len(chapters)} 누적={len(out)}", flush=True)
             time.sleep(DELAY)
             if SMOKE and len(out) >= SMOKE:
                 return out[:SMOKE]
@@ -305,7 +318,8 @@ def _fname(cfg, url):
 
 def _chunk_slice(items, tag):
     # GHA 매트릭스 청크 분할: CHUNK_N>1 이면 i % CHUNK_N == CHUNK_I 슬라이스만.
-    # enum 은 전수(결정적) → 청크 합집합 = 전수. 기본값(CHUNK_N=1)=무분할.
+    # chapter_re 주는 '타이틀 목록'에 적용(안정·결정적) → 서로소 완전분할.
+    # 1단계 직접주는 섹션 목록에 적용. 기본값(CHUNK_N=1)=무분할.
     cn = int(os.environ.get("CHUNK_N", "1"))
     ci = int(os.environ.get("CHUNK_I", "0"))
     if cn > 1:
@@ -321,7 +335,9 @@ def collect(cfg):
         sys.exit(1)
     with open(enum_file) as f:
         urls = [ln.strip() for ln in f if ln.strip()]
-    urls = _chunk_slice(urls, cfg["state"])
+    # chapter_re 주는 enum 단계에서 타이틀 축으로 이미 분할됨 → 재분할 금지.
+    if not cfg.get("chapter_re"):
+        urls = _chunk_slice(urls, cfg["state"])
     os.makedirs(raw, exist_ok=True)
     ok = miss = skip = 0
     for i, url in enumerate(urls, 1):
@@ -346,7 +362,8 @@ def verify(cfg):
         sys.exit(1)
     with open(enum_file) as f:
         urls = [ln.strip() for ln in f if ln.strip()]
-    urls = _chunk_slice(urls, cfg["state"])
+    if not cfg.get("chapter_re"):
+        urls = _chunk_slice(urls, cfg["state"])
     enum_set = set(urls)
     dup = len(urls) - len(enum_set)
     enum_fnames = {_fname(cfg, u) for u in enum_set}
